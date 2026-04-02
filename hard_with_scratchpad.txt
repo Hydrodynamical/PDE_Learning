@@ -1,0 +1,43 @@
+======================================================================
+SESSION TRANSCRIPT
+======================================================================
+Difficulty: hard
+Seed: 42
+n_basis: 4
+Queries used: 15 / 30
+
+Elliptic PDE on [0.0, 1.0]:
+  -(a(x) u')' + b(x) u' + c(x) u = f(x)
+  a(x) = 0.3076 \cdot P_0(x) + 0.1319 \cdot P_1(x) + 0.009905 \cdot P_2(x) + 0.07013 \cdot P_3(x)
+  b(x) = -1.289 \cdot P_0(x) + 0.5531 \cdot P_1(x) - 1.438 \cdot P_2(x) + 1.318 \cdot P_3(x)
+  c(x) = -0.6425 \cdot P_1(x) - 0.5282 \cdot P_2(x) + 0.7985 \cdot P_3(x)
+  f(x) = -0.6096 \cdot P_0(x) - 0.7684 \cdot P_1(x) - 1.221 \cdot P_2(x) + 0.924 \cdot P_3(x)
+  u(0.0) = 0.0,  u(1.0) = 0.0
+
+--- Query History ---
+#    Status  Type        Spec                                                     Info
+-------------------------------------------------------------------------------------
+1    ok      DECOMP      x*(1-x)                                        4x4 matrix row
+2    ok      DECOMP      x**2*(1-x)**2                                  4x4 matrix row
+3    ok      DECOMP      x*(1-x)**2                                     4x4 matrix row
+4    ok      DECOMP      x**2*(1-x)                                     4x4 matrix row
+5    ok      DECOMP      sin(pi*x)                                      4x4 matrix row
+6    ok      DECOMP      sin(2*pi*x)                                    4x4 matrix row
+7    ok      DECOMP      sin(3*pi*x)                                    4x4 matrix row
+8    ok      DECOMP      x*(1-x)*sin(pi*x)                              4x4 matrix row
+9    ok      DECOMP      x**3*(1-x)                                     4x4 matrix row
+10   ok      DECOMP      x*(1-x)**3                                     4x4 matrix row
+11   ok      DECOMP      x**2*(1-x)*sin(pi*x)                           4x4 matrix row
+11   error   DECOMP      sin(pi*x/2)**2                           Boundary condition v
+12   ok      DECOMP      x*(1-x)*(2*x-1)                                4x4 matrix row
+13   ok      DECOMP      x**2*(1-x)**2*cos(pi*x)                        4x4 matrix row
+14   ok      DECOMP      (x-x**2)*exp(x-0.5)                            4x4 matrix row
+15   ok      DECOMP      x*(1-x)*log(x+0.1)                             4x4 matrix row
+
+--- Final Score ---
+Task interactive_hard_42:
+  Coefficient errors:  a=1.6924, b=2.2889, c=0.7985, f=1.6096
+  Pointwise errors:    a=1.8846, b=5.5981, c=0.7504, f=2.9859
+  Total coeff error:   6.3895
+  Total pointwise err: 11.2189
+  Sparsity match:      a=False, b=False, c=False

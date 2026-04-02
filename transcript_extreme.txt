@@ -1,0 +1,68 @@
+======================================================================
+SESSION TRANSCRIPT
+======================================================================
+Difficulty: extreme
+Seed: 42
+n_basis: 8
+Queries used: 41 / 50
+
+Elliptic PDE on [0.0, 1.0]:
+  -(a(x) u')' + b(x) u' + c(x) u = f(x)
+  a(x) = 0.4106 \cdot P_0(x) - 0.004993 \cdot P_2(x) - 0.06809 \cdot P_3(x) - 0.01545 \cdot P_4(x) - 0.03521 \cdot P_5(x) + 0.03654 \cdot P_6(x)
+  b(x) = 0.4308 \cdot P_0(x) - 0.4064 \cdot P_2(x) - 0.5122 \cdot P_3(x) - 0.8138 \cdot P_4(x) + 0.616 \cdot P_5(x) - 0.1139 \cdot P_7(x)
+  c(x) = 0.2322 \cdot P_0(x) + 0.1167 \cdot P_1(x) + 0.2187 \cdot P_2(x) + 0.8714 \cdot P_3(x) + 0.2236 \cdot P_4(x) + 0.2891 \cdot P_7(x)
+  f(x) = 0.9683 \cdot P_0(x) - 0.3349 \cdot P_2(x) + 0.1628 \cdot P_3(x)
+  u(0.0) = 0.0,  u(1.0) = 0.0
+
+--- Query History ---
+#    Status  Type        Spec                                                     Info
+-------------------------------------------------------------------------------------
+1    ok      DECOMP      sin(pi*x)                                      4x8 matrix row
+2    ok      DECOMP      sin(2*pi*x)                                    4x8 matrix row
+3    ok      DECOMP      sin(3*pi*x)                                    4x8 matrix row
+4    ok      DECOMP      x*(1-x)*sin(pi*x)                              4x8 matrix row
+5    ok      DECOMP      x**2*(1-x)**2                                  4x8 matrix row
+6    ok      DECOMP      x*(1-x)*cos(2*pi*x)                            4x8 matrix row
+7    ok      DECOMP      sin(4*pi*x)                                    4x8 matrix row
+8    ok      DECOMP      x**3*(1-x)**3                                  4x8 matrix row
+9    ok      DECOMP      sin(5*pi*x)                                    4x8 matrix row
+10   ok      DECOMP      x*(1-x)*exp(-10*(x-0.5)**2)                    4x8 matrix row
+11   ok      DECOMP      sin(6*pi*x)                                    4x8 matrix row
+12   ok      DECOMP      x*(1-x)*sin(7*pi*x)                            4x8 matrix row
+13   ok      DECOMP      x*(1-x)*exp(-5*(x-0.3)**2)                     4x8 matrix row
+14   ok      DECOMP      x*(1-x)*exp(-5*(x-0.7)**2)                     4x8 matrix row
+15   ok      DECOMP      sin(7*pi*x)                                    4x8 matrix row
+16   ok      DECOMP      x**4*(1-x)**4                                  4x8 matrix row
+17   ok      DECOMP      sin(8*pi*x)                                    4x8 matrix row
+18   ok      DECOMP      x*(1-x)*cos(3*pi*x)                            4x8 matrix row
+19   ok      DECOMP      x*(1-x)*cos(4*pi*x)                            4x8 matrix row
+20   ok      DECOMP      x**5*(1-x)**5                                  4x8 matrix row
+21   ok      DECOMP      x*(1-x)*exp(-8*(x-0.2)**2)                     4x8 matrix row
+22   ok      DECOMP      x*(1-x)*exp(-8*(x-0.8)**2)                     4x8 matrix row
+23   ok      DECOMP      sin(10*pi*x)                                   4x8 matrix row
+24   ok      DECOMP      x*(1-x)*sin(9*pi*x)                            4x8 matrix row
+25   ok      DECOMP      x*(1-x)*cos(5*pi*x)                            4x8 matrix row
+26   ok      DECOMP      x*(1-x)*cos(6*pi*x)                            4x8 matrix row
+27   ok      DECOMP      x*(1-x)*cos(7*pi*x)                            4x8 matrix row
+28   ok      DECOMP      x*(1-x)*cos(8*pi*x)                            4x8 matrix row
+29   ok      DECOMP      x*(1-x)*cos(9*pi*x)                            4x8 matrix row
+30   ok      DECOMP      x*(1-x)*cos(10*pi*x)                           4x8 matrix row
+31   ok      DECOMP      x*(1-x)*exp(-20*(x-0.25)**2)                   4x8 matrix row
+32   ok      DECOMP      x*(1-x)*exp(-20*(x-0.75)**2)                   4x8 matrix row
+33   ok      DECOMP      x*(1-x)*exp(-15*(x-0.4)**2)                    4x8 matrix row
+34   ok      DECOMP      x*(1-x)*exp(-15*(x-0.6)**2)                    4x8 matrix row
+35   ok      DECOMP      x*(1-x)*(1-2*x)                                4x8 matrix row
+36   ok      DECOMP      x*(1-x)*x*(1-2*x)                              4x8 matrix row
+37   ok      DECOMP      x**2*(1-x)**2*sin(pi*x)                        4x8 matrix row
+38   ok      DECOMP      x**2*(1-x)**2*cos(pi*x)                        4x8 matrix row
+39   ok      DECOMP      x**3*(1-x)**2*sin(2*pi*x)                      4x8 matrix row
+40   ok      DECOMP      x*(1-x)*(2*x-1)**2                             4x8 matrix row
+41   ok      DECOMP      x**2*(1-x)**3*sin(3*pi*x)                      4x8 matrix row
+
+--- Final Score ---
+Task interactive_extreme_42:
+  Coefficient errors:  a=0.0932, b=0.4367, c=1.0162, f=0.0000
+  Pointwise errors:    a=0.1425, b=0.5093, c=2.2463, f=0.0000
+  Total coeff error:   1.5461
+  Total pointwise err: 2.8980
+  Sparsity match:      a=True, b=False, c=False
