@@ -197,16 +197,10 @@ def format_compute_result(response: dict) -> str:
     elif rtype == "solve":
         lines = [
             f"Solve result ({response['n_rows']} equations, {response['n_unknowns']} unknowns):",
-            f"  Condition number:      {response['condition_number']:.2e}",
-            f"  f residual norm:       {response['f_residual_norm']:.2e}",
-            f"  LHS residual norm:     {response['lhs_residual_norm']:.2e}",
             f"  a_coeffs = {response['a_coeffs']}",
             f"  b_coeffs = {response['b_coeffs']}",
             f"  c_coeffs = {response['c_coeffs']}",
             f"  f_coeffs = {response['f_coeffs']}",
-            "",
-            "Suggested prediction (copy and submit):",
-            response["predict_block"],
         ]
         return "\n".join(lines)
     else:
@@ -306,7 +300,8 @@ class MockBackend:
 
 def compute_efficiency_curve(session) -> dict:
     """
-    Post-hoc analysis: what was the coefficient error after each DECOMPOSE?
+    Post-hoc analysis: what was the coefficient error after each query?
+    Uses stored G matrices from both DECOMPOSE and QUERY history.
     The model never sees this — it's for benchmark scoring only.
     """
     import numpy as np
@@ -315,14 +310,39 @@ def compute_efficiency_curve(session) -> dict:
     n_b = basis.n_basis
     pde = session.pde
 
-    # Collect DECOMPOSE data in order
-    decompose_history = []
+    # Collect rows from DECOMPOSE history and QUERY history (both store G matrices)
+    history_rows = []
     for r in session.history:
-        if r.status == "ok" and r.response.get("type") == "decompose":
-            decompose_history.append(r.response)
+        if r.status != "ok":
+            continue
+        resp = r.response
+        if resp.get("type") == "decompose":
+            history_rows.append({
+                "G_diff": resp["G_diff"],
+                "G_adv":  resp["G_adv"],
+                "G_react":resp["G_react"],
+                "G_src":  resp["G_src"],
+                "integral_f_phi": resp["integral_f_phi"],
+            })
+        elif "integral_f_phi" in resp and "_G_diff" in resp:
+            history_rows.append({
+                "G_diff": resp["_G_diff"],
+                "G_adv":  resp["_G_adv"],
+                "G_react":resp["_G_react"],
+                "G_src":  resp["_G_src"],
+                "integral_f_phi": resp["integral_f_phi"],
+            })
 
-    if not decompose_history:
+    if not history_rows:
         return {"queries": [], "errors": [], "auc": float('inf')}
+
+    def get_matrices(rows):
+        G_diff  = np.array([r["G_diff"]  for r in rows])
+        G_adv   = np.array([r["G_adv"]   for r in rows])
+        G_react = np.array([r["G_react"] for r in rows])
+        G_src   = np.array([r["G_src"]   for r in rows])
+        rhs     = np.array([r["integral_f_phi"] for r in rows])
+        return G_diff, G_adv, G_react, G_src, rhs
 
     true_coeffs = np.concatenate([
         pde.a.coeffs, pde.b.coeffs, pde.c.coeffs, pde.f.coeffs
@@ -331,26 +351,18 @@ def compute_efficiency_curve(session) -> dict:
     errors = []
     queries = []
 
-    # Replay: after each DECOMPOSE, solve and measure error
-    for k in range(1, len(decompose_history) + 1):
-        rows = decompose_history[:k]
-        G_diff = np.array([r["G_diff"] for r in rows])
-        G_adv = np.array([r["G_adv"] for r in rows])
-        G_react = np.array([r["G_react"] for r in rows])
-        G_src = np.array([r["G_src"] for r in rows])
-        rhs = np.array([r["integral_f_phi"] for r in rows])
-
+    for k in range(1, len(history_rows) + 1):
         if k < n_b:
-            # Not enough equations even for f
             errors.append(float('inf'))
             queries.append(k)
             continue
 
         try:
+            G_diff, G_adv, G_react, G_src, rhs = get_matrices(history_rows[:k])
             f_rec, _, _, _ = np.linalg.lstsq(G_src, rhs, rcond=None)
             A_lhs = np.hstack([G_diff, G_adv, G_react])
-            theta_lhs, _, _, _ = np.linalg.lstsq(A_lhs, rhs, rcond=None)
-            recovered = np.concatenate([theta_lhs, f_rec])
+            theta, _, _, _ = np.linalg.lstsq(A_lhs, rhs, rcond=None)
+            recovered = np.concatenate([theta, f_rec])
             err = float(np.max(np.abs(recovered - true_coeffs)))
         except Exception:
             err = float('inf')
@@ -358,7 +370,6 @@ def compute_efficiency_curve(session) -> dict:
         errors.append(err)
         queries.append(k)
 
-    # Area under the error curve (normalized by number of queries)
     finite_errors = [e for e in errors if np.isfinite(e)]
     auc = float(np.trapezoid(finite_errors)) / max(len(finite_errors), 1) if finite_errors else float('inf')
 
@@ -367,7 +378,7 @@ def compute_efficiency_curve(session) -> dict:
         "errors": errors,
         "auc": auc,
         "final_error": errors[-1] if errors else float('inf'),
-        "queries_to_below_1": next((q for q, e in zip(queries, errors) if e < 1.0), None),
+        "queries_to_below_1":   next((q for q, e in zip(queries, errors) if e < 1.0),  None),
         "queries_to_below_0.1": next((q for q, e in zip(queries, errors) if e < 0.1), None),
     }
 
@@ -382,6 +393,7 @@ def run_session(
     verbose: bool = True,
     max_turns: int = 50,
     hints: bool = False,
+    no_decompose: bool = False,
 ) -> dict:
     """
     Run the interactive LLM session.
@@ -390,8 +402,38 @@ def run_session(
     """
     system_prompt = session.system_prompt()
 
+    # Apply no_decompose flag to session before generating system prompt
+    session.decompose_enabled = not no_decompose
+
     # Add protocol instructions to system prompt
-    protocol = """
+    if no_decompose:
+        protocol = """
+
+## Communication protocol
+
+To probe the PDE with a test function, write:
+    QUERY: <math expression>
+
+To request free calculations, write:
+    COMPUTE: basis_info
+    COMPUTE: eval_basis 0.1 0.25 0.5 0.75 0.9
+    COMPUTE: eval_solution 0.1 0.25 0.5 0.75 0.9
+    COMPUTE: solve
+
+To submit your final prediction, write:
+    PREDICT:
+    a_coeffs = [c0, c1, ...]
+    b_coeffs = [c0, c1, ...]
+    c_coeffs = [c0, c1, ...]
+    f_coeffs = [c0, c1, ...]
+
+Rules:
+- ONE QUERY per response.
+- You may NOT PREDICT in the same response as a QUERY.
+- COMPUTE is free and unlimited.
+"""
+    else:
+        protocol = """
 
 ## Communication protocol
 
@@ -442,6 +484,8 @@ high, add more equations before submitting.
               f"budget: {session.max_queries}")
         print()
 
+    last_solve_coeffs = [None]  # mutable container to track across turns
+
     while not done and turn < max_turns:
         turn += 1
 
@@ -480,6 +524,12 @@ high, add more equations before submitting.
             if act["action"] == "compute":
                 continue  # already handled above
 
+            elif act["action"] == "decompose" and no_decompose:
+                msg = "DECOMPOSE is not available. Use QUERY to probe the PDE, then COMPUTE: solve to recover coefficients."
+                result_parts.append(msg)
+                if verbose:
+                    print(f"  [blocked] {msg}\n")
+
             elif act["action"] in ("query", "decompose"):
                 if not query_executed:
                     if act["action"] == "query":
@@ -494,22 +544,49 @@ high, add more equations before submitting.
                         print(f"  → {result_text}\n")
 
                     # Auto-feedback: show solve progress periodically
-                    if act["action"] == "decompose" and resp.get("status") == "ok":
-                        n_decomps = sum(
+                    if resp.get("status") == "ok":
+                        n_probes = sum(
                             1 for r in session.history
-                            if r.status == "ok" and r.response.get("type") == "decompose"
+                            if r.status == "ok" and (
+                                r.response.get("type") == "decompose"
+                                or "integral_f_phi" in r.response
+                            )
                         )
                         feedback_interval = session.basis.n_basis
-                        if n_decomps >= session.basis.n_basis and n_decomps % feedback_interval == 0:
+                        if n_probes >= session.basis.n_basis and n_probes % feedback_interval == 0:
                             solve_resp = session.compute("solve")
-                            solve_text = format_compute_result(solve_resp)
-                            result_parts.append(
-                                f"\n--- Auto-progress (after {n_decomps} equations) ---\n"
-                                + solve_text
-                            )
-                            if verbose:
-                                print(f"  [auto-progress] {n_decomps} equations collected\n")
-                                print(f"  → {solve_text}\n")
+                            if solve_resp.get("status") == "ok":
+                                solve_text = format_compute_result(solve_resp)
+
+                                # Diff against previous solve
+                                current_coeffs = {
+                                    "a": solve_resp["a_coeffs"],
+                                    "b": solve_resp["b_coeffs"],
+                                    "c": solve_resp["c_coeffs"],
+                                    "f": solve_resp["f_coeffs"],
+                                }
+                                if last_solve_coeffs[0] is not None:
+                                    diff_lines = ["Coefficient changes since last solve:"]
+                                    for name in ["a", "b", "c", "f"]:
+                                        changes = [
+                                            abs(c - p) for c, p
+                                            in zip(current_coeffs[name], last_solve_coeffs[0][name])
+                                        ]
+                                        max_change = max(changes)
+                                        diff_lines.append(
+                                            f"  {name}_coeffs max change: {max_change:.6f}"
+                                        )
+                                    solve_text += "\n" + "\n".join(diff_lines)
+
+                                last_solve_coeffs[0] = current_coeffs
+
+                                result_parts.append(
+                                    f"\n--- Auto-progress (after {n_probes} probes) ---\n"
+                                    + solve_text
+                                )
+                                if verbose:
+                                    print(f"  [auto-progress] {n_probes} probes collected\n")
+                                    print(f"  → {solve_text}\n")
 
                 else:
                     msg = (
@@ -610,6 +687,8 @@ def main():
                         help="Save results plot to file (e.g. results.png)")
     parser.add_argument("--hints", action="store_true",
                         help="Add strategy hints to the system prompt (Round 1/2/3 workflow)")
+    parser.add_argument("--no-decompose", action="store_true",
+                        help="Disable DECOMPOSE; COMPUTE: solve builds system from QUERY history instead")
     args = parser.parse_args()
 
     # Create session
@@ -632,6 +711,7 @@ def main():
         verbose=True,
         max_turns=args.max_turns,
         hints=args.hints,
+        no_decompose=args.no_decompose,
     )
 
     # Save transcript

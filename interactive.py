@@ -76,6 +76,7 @@ class InteractiveSession:
     # State
     prediction_submitted: bool = False
     final_score: Optional[ScoreResult] = None
+    decompose_enabled: bool = True
 
     # What the LLM sees about the solution
     solution_data: dict = field(default_factory=dict)
@@ -138,13 +139,8 @@ The solution u(x) satisfies:
     -(a(x) u'(x))' + b(x) u'(x) + c(x) u(x) = f(x)    on [0, 1]
     u(0) = 0,  u(1) = 0
 
-The coefficient functions a(x), b(x), c(x), f(x) are each a linear combination
-of {n_b} Legendre polynomial basis functions P_0(x), P_1(x), ..., P_{n_b-1}(x)
-shifted to [0, 1].
-
-So each coefficient has the form:  g(x) = c_0 P_0(x) + c_1 P_1(x) + ... + c_{n_b-1} P_{n_b-1}(x)
-
-Your goal: determine the {4 * n_b} unknown scalar coefficients.
+Each coefficient function a(x), b(x), c(x), f(x) is a smooth function that can
+be represented by {n_b} parameters. There are {4 * n_b} unknown parameters total.
 
 ## Solution data
 
@@ -157,23 +153,7 @@ u = [{u_str}]
 Submit a test function and receive ∫f·φ dx and ∫u·φ dx.
     QUERY: <math expression>
 
-### DECOMPOSE (costs 1 from budget)
-Submit a test function and receive the FULL per-basis-function weak-form integrals.
-For each basis function P_j(x), you get:
-    G_diff[j]  = ∫ P_j(x) u'(x) φ'(x) dx     (diffusion term integrals)
-    G_adv[j]   = ∫ P_j(x) u'(x) φ(x) dx      (advection term integrals)
-    G_react[j] = ∫ P_j(x) u(x)  φ(x) dx      (reaction term integrals)
-    G_src[j]   = ∫ P_j(x)       φ(x) dx      (source term integrals)
-
-These are exactly the rows of the linear system:
-    Σ_j a_j G_diff[j] + Σ_j b_j G_adv[j] + Σ_j c_j G_react[j] = Σ_j f_j G_src[j]
-
-So each DECOMPOSE call gives you one equation in {4 * n_b} unknowns.
-With enough equations, you can solve the linear system.
-
-    DECOMPOSE: <math expression>
-
-### COMPUTE (free, no budget cost)
+{self._decompose_section()}### COMPUTE (free, no budget cost)
 Request intermediate calculations:
 
     COMPUTE: basis_info
@@ -186,10 +166,8 @@ Request intermediate calculations:
         → interpolate u(x) at the given x-values
 
     COMPUTE: solve
-        → solves the linear system assembled from all your DECOMPOSE queries so far.
-          Returns the recovered coefficients and a ready-to-paste PREDICT block.
-          Requires at least {4 * n_b} DECOMPOSE queries to be well-determined.
-          Free, no budget cost.
+        → solves the linear system from your queries and returns recovered coefficients
+          with a ready-to-paste PREDICT block. Free, no budget cost.
 
 ### Rules for test functions (QUERY and DECOMPOSE)
     - Must satisfy φ(0) = 0 and φ(1) = 0 (boundary conditions)
@@ -211,10 +189,34 @@ Queries remaining: {self.max_queries - self.queries_used}
 ## To submit your answer
 
 When ready, provide your prediction as:
-    a_coeffs = [c_0, c_1, ..., c_{n_b-1}]
-    b_coeffs = [c_0, c_1, ..., c_{n_b-1}]
-    c_coeffs = [c_0, c_1, ..., c_{n_b-1}]
-    f_coeffs = [c_0, c_1, ..., c_{n_b-1}]
+    a_coeffs = [p_0, p_1, ..., p_{n_b-1}]
+    b_coeffs = [p_0, p_1, ..., p_{n_b-1}]
+    c_coeffs = [p_0, p_1, ..., p_{n_b-1}]
+    f_coeffs = [p_0, p_1, ..., p_{n_b-1}]
+"""
+
+    # ----- System prompt helpers -----
+
+    def _decompose_section(self) -> str:
+        if not self.decompose_enabled:
+            return ""
+        n_b = self.basis.n_basis
+        return f"""### DECOMPOSE (costs 1 from budget)
+Submit a test function and receive the FULL per-basis-function weak-form integrals.
+For each basis function P_j(x), you get:
+    G_diff[j]  = ∫ P_j(x) u'(x) φ'(x) dx     (diffusion term integrals)
+    G_adv[j]   = ∫ P_j(x) u'(x) φ(x) dx      (advection term integrals)
+    G_react[j] = ∫ P_j(x) u(x)  φ(x) dx      (reaction term integrals)
+    G_src[j]   = ∫ P_j(x)       φ(x) dx      (source term integrals)
+
+These are exactly the rows of the linear system:
+    Σ_j a_j G_diff[j] + Σ_j b_j G_adv[j] + Σ_j c_j G_react[j] = Σ_j f_j G_src[j]
+
+So each DECOMPOSE call gives you one equation in {4 * n_b} unknowns.
+With enough equations, you can solve the linear system.
+
+    DECOMPOSE: <math expression>
+
 """
 
     # ----- Query interface -----
@@ -272,13 +274,36 @@ When ready, provide your prediction as:
         result = compute_weak_form(self.solution, tf)
         self.queries_used += 1
 
+        # Compute and store G matrices internally (not shown to model)
+        # This ensures COMPUTE: solve uses exact-consistent matrix rows
+        x_q = self.solution.x
+        u_q = self.solution.u
+        u_x_q = self.solution.u_x()
+        dx = x_q[1] - x_q[0]
+        phi_q = tf(x_q)
+        dphi_q = tf.derivative(x_q, 1)
+        psi_q = self.basis.evaluate(x_q)
+        n_b = self.basis.n_basis
+        I = lambda y: _composite_simpson(y, dx)
+
+        G_diff  = [I(psi_q[j] * u_x_q * dphi_q) for j in range(n_b)]
+        G_adv   = [I(psi_q[j] * u_x_q * phi_q)  for j in range(n_b)]
+        G_react = [I(psi_q[j] * u_q   * phi_q)  for j in range(n_b)]
+        G_src   = [I(psi_q[j]          * phi_q)  for j in range(n_b)]
+
         response = {
             "status": "ok",
+            "type": "query",
             "spec": spec,
             "integral_f_phi": round(result.rhs, 12),
             "integral_u_phi": round(result.u_phi, 12),
             "query_number": self.queries_used,
             "queries_remaining": self.max_queries - self.queries_used,
+            # Internal fields for COMPUTE: solve (not shown to model)
+            "_G_diff":  G_diff,
+            "_G_adv":   G_adv,
+            "_G_react": G_react,
+            "_G_src":   G_src,
         }
 
         self.history.append(QueryRecord(
@@ -470,19 +495,20 @@ When ready, provide your prediction as:
 
     def _compute_solve(self) -> dict:
         """
-        Solve the linear system assembled from all successful DECOMPOSE queries.
-
-        Reads G_diff, G_adv, G_react, G_src, and integral_f_phi from session history.
+        Solve the linear system. Uses DECOMPOSE history if available, otherwise
+        falls back to building the system from QUERY history.
         Free — no budget cost.
         """
-        n_b = self.basis.n_basis
-        n_unknowns = 4 * n_b
-
-        # Collect all successful DECOMPOSE rows
+        # Check for DECOMPOSE history first
         decomp_records = [
             r for r in self.history
             if r.status == "ok" and r.response.get("type") == "decompose"
         ]
+        if not decomp_records:
+            return self._compute_solve_from_queries()
+
+        n_b = self.basis.n_basis
+        n_unknowns = 4 * n_b
         n_rows = len(decomp_records)
 
         if n_rows < n_unknowns:
@@ -515,6 +541,91 @@ When ready, provide your prediction as:
         c_rec = theta[2 * n_b:3 * n_b]
 
         # Condition number of the full system
+        A_full = np.hstack([G_diff, G_adv, G_react, -G_src])
+        sv_full = np.linalg.svd(A_full, compute_uv=False)
+        cond = float(sv_full[0] / sv_full[-1]) if sv_full[-1] > 0 else float("inf")
+
+        def _fmt(arr):
+            return "[" + ", ".join(f"{v:.6g}" for v in arr) + "]"
+
+        predict_block = (
+            "PREDICT:\n"
+            f"a_coeffs = {_fmt(a_rec)}\n"
+            f"b_coeffs = {_fmt(b_rec)}\n"
+            f"c_coeffs = {_fmt(c_rec)}\n"
+            f"f_coeffs = {_fmt(f_rec)}"
+        )
+
+        return {
+            "status": "ok",
+            "type": "solve",
+            "n_rows": n_rows,
+            "n_unknowns": n_unknowns,
+            "a_coeffs": a_rec.tolist(),
+            "b_coeffs": b_rec.tolist(),
+            "c_coeffs": c_rec.tolist(),
+            "f_coeffs": f_rec.tolist(),
+            "f_residual_norm": float(np.linalg.norm(rhs_vec - G_src @ f_rec)),
+            "lhs_residual_norm": float(np.linalg.norm(rhs_vec - A_lhs @ theta)),
+            "condition_number": cond,
+            "predict_block": predict_block,
+        }
+
+    def _compute_solve_from_queries(self) -> dict:
+        """
+        Build and solve the linear system from QUERY history.
+        Used when DECOMPOSE is disabled or no DECOMPOSE history exists.
+        """
+        n_b = self.basis.n_basis
+        n_unknowns = 4 * n_b
+
+        # Collect stored G matrices from QUERY history
+        seen_specs = set()
+        rows_G_diff = []
+        rows_G_adv = []
+        rows_G_react = []
+        rows_G_src = []
+        rhs_values = []
+
+        for r in self.history:
+            if r.status == "ok" and "integral_f_phi" in r.response and "_G_diff" in r.response:
+                spec = r.response.get("spec", "")
+                if spec not in seen_specs:
+                    seen_specs.add(spec)
+                    rows_G_diff.append(r.response["_G_diff"])
+                    rows_G_adv.append(r.response["_G_adv"])
+                    rows_G_react.append(r.response["_G_react"])
+                    rows_G_src.append(r.response["_G_src"])
+                    rhs_values.append(r.response["integral_f_phi"])
+
+        n_rows = len(rhs_values)
+
+        if n_rows < n_unknowns:
+            return {
+                "status": "error",
+                "type": "solve",
+                "message": (
+                    f"Not enough queries yet: {n_rows} unique test functions, "
+                    f"need at least {n_unknowns}."
+                ),
+                "n_rows": n_rows,
+                "n_unknowns": n_unknowns,
+            }
+
+        G_diff  = np.array(rows_G_diff)
+        G_adv   = np.array(rows_G_adv)
+        G_react = np.array(rows_G_react)
+        G_src   = np.array(rows_G_src)
+        rhs_vec = np.array(rhs_values)
+
+        # Solve (same logic as DECOMPOSE-based solve)
+        f_rec, _, _, _ = np.linalg.lstsq(G_src, rhs_vec, rcond=None)
+        A_lhs = np.hstack([G_diff, G_adv, G_react])
+        theta, _, _, _ = np.linalg.lstsq(A_lhs, rhs_vec, rcond=None)
+        a_rec = theta[:n_b]
+        b_rec = theta[n_b:2 * n_b]
+        c_rec = theta[2 * n_b:3 * n_b]
+
         A_full = np.hstack([G_diff, G_adv, G_react, -G_src])
         sv_full = np.linalg.svd(A_full, compute_uv=False)
         cond = float(sv_full[0] / sv_full[-1]) if sv_full[-1] > 0 else float("inf")
