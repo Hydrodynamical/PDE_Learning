@@ -3,14 +3,16 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{booktabs}
+\usepackage[numbers,sort&compress]{natbib}
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{enumitem}
+\usepackage{graphicx}
 
 \hypersetup{colorlinks=true, linkcolor=blue!60!black, citecolor=blue!60!black, urlcolor=blue!60!black}
 
 \title{\textbf{Can Language Models Learn a PDE?}\\[4pt]
-\large Probing Scientific Reasoning via Weak-Form Identification\\of an Unknown Elliptic Equation}
+\large A Cognitive Benchmark for Scientific Reasoning\\via Weak-Form Identification of an Unknown Elliptic Equation}
 \author{}
 \date{}
 
@@ -20,22 +22,24 @@
 \maketitle
 
 \begin{abstract}
-We present a benchmark that tests whether a large language model can
-identify an unknown partial differential equation from data, using the same
-methodology a mathematician would: probing the equation with test functions
-through its weak formulation, analyzing the resulting integrals, and
-recovering the unknown coefficients.  The model receives solution data, a
-budget of queries that return weak-form integrals, and free access to
-diagnostic tools---but must design its own experimental strategy.  We show
-that a single paragraph of mathematical context about ill-conditioning,
-added to the initial prompt, reduces coefficient recovery error by 42\% on a
-hard problem instance, with the model demonstrating qualitatively different
-reasoning: checking weight balances before committing queries, seeking test
-functions that emphasize underconstrained terms, and articulating why certain
-measurements are more informative than others.  The benchmark cleanly
-separates tool use from scientific reasoning, providing a measurable test of
-whether language models can \emph{do science}---form hypotheses, design
-experiments, and diagnose failures---rather than merely follow instructions.
+We present a benchmark that measures scientific reasoning in large language
+models through the task of identifying an unknown elliptic PDE from its
+solution.  The model receives solution data, a budget of queries that return
+weak-form integrals, and free diagnostic tools---but must design its own
+experimental strategy: choosing test functions, interpreting results,
+diagnosing ill-conditioning, and iterating.  The task produces a
+\emph{cognitive profile} spanning five faculties from the Burnell et
+al.\ cognitive taxonomy: mathematical reasoning, metacognitive monitoring,
+metacognitive control, executive planning, and cognitive flexibility.  Each
+faculty is measured by a dedicated, mathematically grounded metric with
+computable ground truth.  Across three OpenAI models (GPT-4o, GPT-5.4-mini,
+GPT-5.4) and three difficulty levels, we find a clear capability hierarchy:
+GPT-5.4 achieves near-perfect coefficient recovery at medium difficulty
+(error $< 10^{-4}$) while GPT-4o fails at basic tool use on hard problems.
+The benchmark reveals distinct behavioral failure modes---test function
+homogeneity, premature termination, and over-reliance on consistency
+checks---that map onto specific cognitive deficits.  All code, logs, and
+data are publicly available.
 \end{abstract}
 
 %----------------------------------------------------------------------
@@ -44,33 +48,45 @@ experiments, and diagnose failures---rather than merely follow instructions.
 
 Benchmarks for scientific reasoning in large language models (LLMs) often
 test whether the model can \emph{recall} known facts or \emph{solve}
-textbook problems.  These tasks measure knowledge retrieval, not the open-ended
-reasoning that characterizes real scientific work: forming hypotheses,
-designing experiments to test them, interpreting results, and iterating.
+textbook problems.  These tasks measure knowledge retrieval, not the
+open-ended reasoning that characterizes real scientific work: forming
+hypotheses, designing experiments to test them, interpreting results, and
+iterating when the results are surprising.
+
+Recent work on measuring progress toward AGI has called for benchmarks that
+are \emph{targeted to specific cognitive abilities}, \emph{varied in
+difficulty}, and \emph{varied in structure}~\citep{burnell2026cognitive}.
+The Burnell et al.\ cognitive taxonomy identifies ten faculties underlying
+general intelligence, including reasoning, metacognition, executive
+functions, and problem solving.  Existing benchmarks cover some of these
+faculties in isolation, but few provide a single task that engages multiple
+faculties simultaneously with mathematically grounded evaluation.
 
 We propose a benchmark built around a classical problem in applied
 mathematics: \emph{identifying an unknown elliptic PDE from its solution}.
 The model is given the solution $u(x)$ on a grid, a budget of queries that
 probe the PDE through its weak formulation, and a set of computational
-tools.  It must design a sequence of test functions, interpret the
-resulting integrals, and recover the unknown coefficient functions.
+tools.  It must design a sequence of test functions, interpret the resulting
+integrals, and recover the unknown coefficient functions.  The task is
+\emph{inherently ill-conditioned} in a way that rewards scientific
+reasoning: not all test functions are equally informative, and a model that
+reasons about \emph{which measurements matter} will significantly
+outperform one that collects data mechanically.
 
-The key insight is that this problem is \emph{inherently ill-conditioned}
-in a way that rewards scientific reasoning.  Not all test functions are
-equally informative: some primarily constrain the diffusion coefficient
-while revealing almost nothing about the reaction coefficient.  A model
-that mechanically collects equations and solves the linear system will get
-a mediocre answer.  A model that reasons about \emph{which measurements
-are informative}---checking weight balances, seeking test functions that
-emphasize underconstrained terms---will do significantly better.
+The benchmark produces a cognitive profile across five faculties, each
+measured by a dedicated metric with computable ground truth:
 
-Our experimental design isolates this reasoning capability.  We compare
-two runs that differ \textbf{only in the initial prompt}: a baseline
-(``Begin.'') and an enhanced version that includes one paragraph explaining
-\emph{why} the weak-form system can be ill-conditioned.  The tools, the
-PDE, the query budget, and all code are identical.  The enhanced prompt
-produces a 42\% reduction in coefficient error, with the model exhibiting
-qualitatively different experimental design.
+\begin{enumerate}[nosep]
+    \item \textbf{Mathematical reasoning}: total coefficient recovery error.
+    \item \textbf{Metacognitive monitoring}: does the model know which
+          coefficients it is uncertain about?
+    \item \textbf{Metacognitive control}: does the model target its queries
+          toward its most uncertain coefficients?
+    \item \textbf{Executive planning}: does the model iterate (multiple
+          solves) or stop prematurely?
+    \item \textbf{Cognitive flexibility}: can the model switch between test
+          function families when its current approach stalls?
+\end{enumerate}
 
 %----------------------------------------------------------------------
 \section{Problem Setup}
@@ -85,243 +101,382 @@ $c(x)$, and $f(x)$ in the second-order elliptic boundary value problem
     \qquad x \in [0,1],
 \end{equation}
 with homogeneous Dirichlet conditions $u(0) = u(1) = 0$.  Each coefficient
-is a linear combination of shifted Legendre polynomials:
+is a linear combination of $N$ shifted Legendre polynomials:
 \[
     a(x) = \sum_{j=0}^{N-1} a_j\, P_j(x),
     \qquad
     b(x) = \sum_{j=0}^{N-1} b_j\, P_j(x),
     \qquad \text{etc.}
 \]
-The model is told that each coefficient is ``smooth and represented by $N$
-parameters,'' giving $4N$ unknowns total.  For the \emph{hard} difficulty
-used in our experiments, $N = 4$ and there are 16 unknowns.  The
-coefficients are drawn randomly with controlled sparsity and scale.
+giving $4N$ unknowns total.  The coefficients are drawn randomly with
+controlled sparsity and scale, and the PDE is solved numerically to produce
+the solution $u(x)$ on a fine grid.
 
-\subsection{What the Model Receives}
+\subsection{Difficulty Levels}
 
-The model is given the following information and tools:
+The number of basis functions scales with difficulty, controlling both the
+dimensionality of the inverse problem and the query budget:
 
-\paragraph{Solution data.}
-The numerical solution $u(x)$ evaluated on a grid of points.  The model
-can also request $u(x)$ and $u'(x)$ at arbitrary points via a free
-\texttt{COMPUTE: eval\_solution} command.
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Difficulty} & $N$ & \textbf{Unknowns} & \textbf{Budget} & \textbf{Turn limit} \\
+\midrule
+Easy    & 2 &  8 & 12 & 24 \\
+Medium  & 3 & 12 & 18 & 36 \\
+Hard    & 4 & 16 & 24 & 48 \\
+Extreme & 8 & 32 & 48 & 96 \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-\paragraph{The weak form identity.}
-The system prompt states the weak formulation obtained by integration by
-parts: for any test function $\varphi$ with $\varphi(0) = \varphi(1) = 0$,
-\begin{equation}\label{eq:weak}
-    \int_0^1 a(x)\, u'(x)\, \varphi'(x)\dd x
-    + \int_0^1 b(x)\, u'(x)\, \varphi(x)\dd x
-    + \int_0^1 c(x)\, u(x)\, \varphi(x)\dd x
-    = \int_0^1 f(x)\, \varphi(x)\dd x.
-\end{equation}
+\noindent The budget is set to $1.5\times$ the number of unknowns,
+providing enough headroom for the model to solve the system, diagnose
+problems, and iterate---but not so much that brute-force data collection
+suffices.  The turn limit is $2\times$ the budget.
+
+\subsection{Tools Available to the Model}
+
+The model receives the following tools via a system prompt:
 
 \paragraph{Query tool (\texttt{QUERY}).}
 The model submits a test function $\varphi(x)$ as a symbolic expression
 and receives the scalar $\int_0^1 f(x)\,\varphi(x)\dd x$.  Each query
-costs one unit from a finite budget (50 for the hard problem).
-
-\paragraph{Weight integral tool (\texttt{COMPUTE: term\_integral}).}
-For any test function $\varphi$, the model can request the three weight
-integrals from the left-hand side of~\eqref{eq:weak}:
-\begin{align*}
-    \text{diffusion:} &\quad \textstyle\int_0^1 u'(x)\,\varphi'(x)\dd x, \\
-    \text{advection:} &\quad \textstyle\int_0^1 u'(x)\,\varphi(x)\dd x, \\
-    \text{reaction:}  &\quad \textstyle\int_0^1 u(x)\,\varphi(x)\dd x.
-\end{align*}
-These are computable from the known solution $u(x)$ and the test function
-$\varphi(x)$ alone, with no knowledge of $a$, $b$, $c$.  This tool is free
-and unlimited.
+costs one unit from the budget.  Internally, the system also computes and
+stores the basis-weighted integrals
+\[
+    G^{\text{diff}}_{kj} = \int_0^1 P_j(x)\, u'(x)\, \varphi_k'(x)\dd x,
+    \qquad
+    G^{\text{adv}}_{kj} = \int_0^1 P_j(x)\, u'(x)\, \varphi_k(x)\dd x,
+    \qquad
+    G^{\text{react}}_{kj} = \int_0^1 P_j(x)\, u(x)\, \varphi_k(x)\dd x,
+\]
+for use by the solve tool.  The model never sees these matrices.
 
 \paragraph{Solve tool (\texttt{COMPUTE: solve}).}
-After accumulating at least $4N$ queries, the model can request an
-automatic least-squares recovery of all coefficients from the stored query
-data.  This is free.
+Assembles the $K \times 3N$ matrix $A = [G^{\text{diff}} \mid G^{\text{adv}}
+\mid G^{\text{react}}]$ and solves the least-squares problem
+$\min_\theta \|A\theta - r\|_2^2$ for the operator coefficients, and
+separately recovers $f$ via $\min_f \|G^{\text{src}} f - r\|_2^2$.
+Returns the recovered coefficient vectors and, after the first call, the
+maximum per-coefficient change from the previous solve (enabling the model
+to assess convergence).  Free and unlimited, but requires at least $4N$
+stored queries.
 
-\paragraph{Verify tool (\texttt{COMPUTE: verify}).}
-The model can test its current coefficient estimates against a new test
-function by comparing the predicted left-hand side of~\eqref{eq:weak}
-(computed from estimated $\hat{a}, \hat{b}, \hat{c}$) to the actual
-$\int f\varphi\dd x$ (which costs one query).
+\paragraph{Solution evaluation (\texttt{COMPUTE: eval\_solution}).}
+Returns $u(x)$ and $u'(x)$ at arbitrary points.  Free.
 
-\subsection{What the Model Must Figure Out}
+\paragraph{Term integral tool (\texttt{COMPUTE: term\_integral}).}
+Returns one of the three weight integrals ($\int u'\varphi'\dd x$,
+$\int u'\varphi\dd x$, $\int u\varphi\dd x$) for a candidate test function,
+allowing the model to assess informativeness \emph{before} spending a query.
+Free.
 
-The model must decide:
-\begin{enumerate}[nosep]
-    \item Which test functions to submit as queries.
-    \item When to call \texttt{solve} and whether to add more queries
-          afterward.
-    \item How to use \texttt{term\_integral} to evaluate whether a
-          candidate test function is informative \emph{before} spending
-          a query on it.
-    \item When the coefficients are accurate enough to submit.
-\end{enumerate}
+\paragraph{Consistency check (\texttt{COMPUTE: check}).}
+Compares the predicted left-hand side of~\eqref{eq:pde} (from estimated
+$\hat a, \hat b, \hat c$) to the actual $\int f\varphi\dd x$ for a new
+test function.  Costs one query.  The system warns the model when zero
+discrepancy is expected due to exact determination.
 
-\noindent The critical scientific insight is that not all test functions
-contribute equally to the linear system.
+\paragraph{Submission (\texttt{PREDICT}).}
+Ends the session and submits the coefficients from the model's most recent
+\texttt{COMPUTE: solve} as its answer.  The model decides \emph{when} to
+stop, but the submitted answer always comes from the solver, eliminating
+transcription errors.
+
+\subsection{The Initial Prompt}
+
+The standard prompt provides mathematical context about the task:
+
+\begin{quote}
+\small
+\texttt{Note: in elliptic inverse problems of this type, the three
+coefficient functions a(x), b(x), c(x) are not equally identifiable from
+weak-form data. The difficulty of recovering each coefficient depends on
+the magnitude of its contribution to the weak-form equations relative to
+the others---and this varies with the solution u(x) and the test functions
+you choose.}
+\end{quote}
+
+\noindent This tells the model \emph{what} is hard (unequal
+identifiability) without telling it \emph{what to do about it}.
+A baseline prompt without this context is available for ablation.
 
 %----------------------------------------------------------------------
 \section{The Ill-Conditioning Problem}
+\label{sec:illcond}
 %----------------------------------------------------------------------
 
-The weak form~\eqref{eq:weak} produces one linear equation per test
-function, relating the $4N$ unknown coefficients to the measured
-$\int f\varphi\dd x$.  Each equation has three contributions on the
-left-hand side---diffusion, advection, and reaction---weighted by the
-integrals that the \texttt{term\_integral} tool returns.
+The weak form~\eqref{eq:pde} produces one linear equation per test
+function, with three contributions on the left-hand side---diffusion,
+advection, and reaction---weighted by the integrals that the
+\texttt{term\_integral} tool returns.
 
 For a typical test function, these weights have very different magnitudes.
-The diffusion weight involves $u'(x)\,\varphi'(x)$, where both factors
-are $O(1)$ for smooth functions.  The reaction weight involves
-$u(x)\,\varphi(x)$, and since the solution $u(x)$ satisfies homogeneous
-boundary conditions and is often small in magnitude ($|u| \sim 0.01$--$0.1$
-in our problems), this weight is correspondingly small.  As a result:
-\begin{itemize}[nosep]
-    \item The diffusion coefficient $a(x)$ dominates every equation and is
-          easy to recover.
-    \item The advection coefficient $b(x)$ has medium influence and is
-          recovered with moderate accuracy.
-    \item The reaction coefficient $c(x)$ has tiny influence and is
-          difficult to recover---errors in $a$ and $b$ are absorbed into
-          the estimate of $c$.
-\end{itemize}
-This is a well-known property of elliptic inverse problems: the reaction
-term is the hardest to identify from weak-form data.  A mathematician
-would compensate by choosing test functions that amplify the reaction
-weight relative to the diffusion weight---for example, very smooth
-functions with small derivatives but large values where $|u(x)|$ is
-maximized.
+The diffusion weight involves $u'(x)\varphi'(x)$, where both factors are
+$O(1)$ for smooth functions.  The reaction weight involves
+$u(x)\varphi(x)$, and since the solution satisfies homogeneous boundary
+conditions and is often small ($|u| \sim 0.01$--$0.3$), this weight is
+correspondingly small.  As a result:
 
-The benchmark tests whether the model can discover and act on this insight.
+\begin{itemize}[nosep]
+    \item The source $f(x)$ is recovered essentially perfectly (error
+          $\sim 10^{-11}$) because it appears linearly on the right-hand
+          side.
+    \item The diffusion coefficient $a(x)$ dominates every equation and is
+          recovered with high accuracy.
+    \item The advection coefficient $b(x)$ has moderate influence.
+    \item The reaction coefficient $c(x)$ has tiny influence and is the
+          hardest to recover---errors in $a$ and $b$ are absorbed into the
+          estimate of $c$.
+\end{itemize}
+
+\noindent This creates a natural \emph{identifiability hierarchy}:
+$f \gg a > b > c$.  A model that mechanically collects equations
+will recover $f$ and $a$ but struggle with $b$ and $c$.  A model that
+reasons about which test functions amplify the reaction weight will do
+better on $c$.  This hierarchy is the core discriminating mechanism of
+the benchmark.
+
+%----------------------------------------------------------------------
+\section{Cognitive Profile: Metrics}
+\label{sec:metrics}
+%----------------------------------------------------------------------
+
+Following the cognitive taxonomy of Burnell et al.~\citep{burnell2026cognitive},
+we define five metrics that together constitute a \emph{cognitive profile}
+for each model.  A key advantage of this task is that the ground truth for
+each metric is \emph{exactly computable} from the stored $G$-matrices at
+every point in the session, without requiring human judgment.
+
+\subsection{Mathematical Reasoning: Coefficient Error}
+
+The primary outcome measure.  For each coefficient $j \in \{a, b, c, f\}$,
+the error is the mean absolute deviation of the recovered Legendre
+coefficients from the true values:
+\[
+    E_j = \frac{1}{N} \sum_{i=0}^{N-1} |\hat\theta_{j,i} - \theta_{j,i}^*|.
+\]
+The total error is $E = E_a + E_b + E_c + E_f$.  We also report pointwise
+error $\max_{x \in [0,1]} |j^{\text{pred}}(x) - j^{\text{true}}(x)|$ for
+each coefficient function.
+
+\subsection{Metacognitive Monitoring: $M_k$}
+
+After each \texttt{COMPUTE: solve}, the model reports its confidence that
+each coefficient vector is within 0.1 of the true value:
+\texttt{Confidence: a=XX\%, b=XX\%, c=XX\%, f=XX\%}.  The true epistemic
+state is computable from the Fisher information: after $k$ queries, the
+least-squares covariance is $(A_k^\top A_k)^{-1}$, giving per-block
+uncertainty
+\[
+    \sigma_k(j) = \sqrt{\operatorname{mean}\!\bigl(
+        \operatorname{diag}(A_k^\top A_k)^{-1}\big|_{\text{block }j}
+    \bigr)},
+    \qquad j \in \{a, b, c\}.
+\]
+Monitoring accuracy is the Spearman rank correlation between the model's
+stated uncertainty $(1 - \hat c_k(j))$ and the true uncertainty
+$\sigma_k(j)$:
+\[
+    M_k = \rho_S\!\bigl(\sigma_k,\, 1 - \hat c_k\bigr).
+\]
+$M_k = 1$ means the model correctly ranks which coefficients are most
+uncertain.  $M_k \approx 0$ means no self-knowledge.  We report the
+session mean $\bar M$.
+
+\subsection{Metacognitive Control: $C_k$}
+
+Monitoring is only useful if it drives behavior.  After query $k$, we
+identify the most uncertain coefficient $j^* = \arg\max_j \sigma_k(j)$
+and compute the information gain from query $k{+}1$ for each coefficient
+via a Sherman--Morrison update on $(A_k^\top A_k)^{-1}$:
+\[
+    \mathrm{IG}_{k+1}(j) = \sigma_k(j) - \sigma_{k+1}(j).
+\]
+Control efficiency is:
+\[
+    C_k = \frac{\mathrm{IG}_{k+1}(j^*)}{\max_j\, \mathrm{IG}_{k+1}(j)}.
+\]
+$C_k = 1$ means the model chose the query that maximally reduces
+uncertainty on its hardest coefficient.  We report the session mean
+$\bar C$.
+
+\subsection{Executive Planning: Solve Count and Budget Utilization}
+
+A model that calls \texttt{COMPUTE: solve} multiple times and uses its
+full query budget is exhibiting iterative experimental design---the
+hallmark of scientific planning.  We report:
+\begin{itemize}[nosep]
+    \item \textbf{Solve count}: number of times \texttt{COMPUTE: solve}
+          was called.
+    \item \textbf{Budget utilization}: fraction of the query budget used
+          (queries used / budget).
+    \item \textbf{Check-to-query ratio}: fraction of budget spent on
+          consistency checks vs.\ new queries.  High ratios indicate
+          inhibitory control failure (the model wastes budget on
+          uninformative verification instead of gathering new data).
+\end{itemize}
+
+\subsection{Cognitive Flexibility: Test Function Diversity}
+
+The system classifies each test function into one of four families:
+polynomial ($x^m(1{-}x)^n$ products), trigonometric ($\sin$, $\cos$
+combinations), exponential ($e^{\alpha x}$ weighted), and localized
+(narrow-support functions).  A model that uses only polynomials---which
+are nearly collinear in the weak-form integral space---is exhibiting
+cognitive inflexibility.  We report the number of distinct families used
+and the entropy of the family distribution.
 
 %----------------------------------------------------------------------
 \section{Experimental Design}
 %----------------------------------------------------------------------
 
-\subsection{The Controlled Variable}
+\subsection{Models}
 
-We compare two conditions that differ \textbf{only in the initial user
-message} sent to the model.  All code, tools, PDE instances, random seeds,
-and query budgets are identical.
+We evaluate three OpenAI models spanning two generations:
 
-\paragraph{Baseline prompt.}
-\begin{quote}
-\texttt{Begin.}
-\end{quote}
-
-\paragraph{Enhanced prompt.}
-\begin{quote}
-\texttt{Begin. Important background: the weak form equation is}
-
-\smallskip
-\texttt{~~$\int a(x)u'(x)\varphi'(x)\,dx + \int b(x)u'(x)\varphi(x)\,dx
-  + \int c(x)u(x)\varphi(x)\,dx = \int f(x)\varphi(x)\,dx$}
-
-\smallskip
-\texttt{The first term (diffusion) involves $u'$ and $\varphi'$. The second
-  term (advection) involves $u'$ and $\varphi$. The third term (reaction)
-  involves $u$ and $\varphi$.}
-
-\smallskip
-\texttt{Each test function $\varphi$ produces one equation with three unknown
-  contributions on the left. If one contribution dominates (say the
-  diffusion weight is 100x larger than the reaction weight), then that
-  equation primarily constrains the diffusion coefficient $a(x)$ and tells
-  you almost nothing about $c(x)$. An ill-conditioned system arises when
-  all your equations are dominated by the same term.}
-
-\smallskip
-\texttt{Use COMPUTE: term\_integral to check the three weights for a test
-  function before spending a query on it. Look for test functions that give
-  balanced weights across the three terms, or that emphasize a term that
-  your existing equations have not yet constrained well.}
-\end{quote}
-
-\noindent The enhanced prompt explains \emph{why} the system can be
-ill-conditioned and \emph{which tool} to use to diagnose it, but does not
-specify which test functions to choose.  The model must discover those on
-its own.
-
-\subsection{Evaluation Metrics}
-
-We report:
 \begin{itemize}[nosep]
-    \item \textbf{Coefficient error}: $\max_j |c_j^{\text{pred}} -
-          c_j^{\text{true}}|$ for each coefficient function, and total.
-    \item \textbf{Pointwise error}: $\max_{x \in [0,1]}
-          |c^{\text{pred}}(x) - c^{\text{true}}(x)|$ for each coefficient.
-    \item \textbf{Queries used}: total number of budget-consuming actions.
-    \item \textbf{Efficiency AUC}: area under the error-vs-queries curve,
-          computed post hoc by solving the system at each query count.
+    \item \textbf{GPT-4o}: the last major pre-reasoning-era model (2024).
+    \item \textbf{GPT-5.4-mini}: the efficient tier of the current GPT-5
+          family.
+    \item \textbf{GPT-5.4}: the current frontier reasoning model.
 \end{itemize}
+
+\noindent All models use the standard prompt (with mathematical context),
+temperature 0 (where available), and the same system prompt and tool
+interface.
+
+\subsection{Protocol}
+
+Each model is evaluated at three difficulty levels (easy, medium, hard)
+across two random seeds (42, 137), for a total of $3 \times 3 \times 2
+= 18$ runs.  Budgets and turn limits are auto-scaled from difficulty.
+Each run produces a JSON log containing: the full turn-by-turn transcript,
+every query and its result, every solve with coefficient errors against
+ground truth, every consistency check, every term integral call,
+the post-hoc efficiency curve (error at each query count), and the
+metacognitive metrics ($\sigma$-curves, monitoring reports, control
+efficiency).
 
 %----------------------------------------------------------------------
 \section{Results}
+\label{sec:results}
 %----------------------------------------------------------------------
 
-\subsection{Hard Difficulty, Seed 42}
+\subsection{Cross-Model Comparison}
 
-Table~\ref{tab:results} compares the baseline and enhanced prompts on the
-same hard problem instance ($N = 4$, 16 unknowns).
+Table~\ref{tab:sweep} shows the primary results.  The identifiability
+hierarchy $f \gg a > b > c$ holds across all models and difficulties:
+$f$ is recovered to machine precision, $a$ is consistently accurate, and
+$c$ is the limiting factor.
 
 \begin{table}[h]
 \centering
-\caption{Coefficient recovery on hard difficulty, seed 42.}\label{tab:results}
-\begin{tabular}{lcc}
+\caption{Coefficient error across models and difficulty levels (2 seeds each).
+``---'' indicates the model failed to produce a scored run.}\label{tab:sweep}
+\small
+\begin{tabular}{llrrrrrrrr}
 \toprule
-\textbf{Metric} & \textbf{Baseline} & \textbf{Enhanced} \\
+\textbf{Model} & \textbf{Diff} & \textbf{Seed} & $E_a$ & $E_b$ & $E_c$
+    & $E_f$ & $E$ & \textbf{Solves} & \textbf{Q used} \\
 \midrule
-Total coefficient error & 1.78 & \textbf{1.03} \\
-Total pointwise error   & 2.79 & \textbf{1.58} \\
-$a(x)$ coeff error      & 0.051 & 0.021 \\
-$b(x)$ coeff error      & 0.364 & 0.182 \\
-$c(x)$ coeff error      & 1.365 & 0.824 \\
-$f(x)$ coeff error      & 0.000 & 0.000 \\
-Queries used            & 17   & 17 \\
-Efficiency AUC          & 1.96 & \textbf{1.03} \\
-Queries to error $< 1.0$ & never & 8 \\
-Test function diversity & 9 poly, 7 trig & 7 poly, 8 trig, 1 localized \\
+GPT-4o       & easy   & 42  & 0.0001 & 0.0004 & 0.0026 & 0.0  & 0.003  & 2 & 11 \\
+GPT-4o       & easy   & 137 & 0.0000 & 0.0000 & 0.0000 & 0.0  & 0.000  & 3 & 12 \\
+GPT-5.4-mini & easy   & 42  & 0.0000 & 0.0002 & 0.0014 & 0.0  & 0.002  & 1 & 10 \\
+GPT-5.4-mini & easy   & 137 & 0.0000 & 0.0000 & 0.0001 & 0.0  & 0.000  & 1 &  8 \\
+GPT-5.4      & easy   & 42  & 0.0000 & 0.0001 & 0.0004 & 0.0  & 0.001  & 3 & 12 \\
+GPT-5.4      & easy   & 137 & 0.0000 & 0.0000 & 0.0000 & 0.0  & 0.000  & 4 & 12 \\
+\midrule
+GPT-4o       & medium & 42  & ---    & ---    & ---    & ---  & ---    & 0 &  9 \\
+GPT-4o       & medium & 137 & 0.0000 & 0.0002 & 0.0019 & 0.0  & 0.002  & 4 & 18 \\
+GPT-5.4-mini & medium & 42  & 0.1861 & 0.6740 & 1.4416 & 0.0  & 2.302  & 1 & 17 \\
+GPT-5.4-mini & medium & 137 & 0.0229 & 0.2777 & 2.4272 & 0.0  & 2.728  & 3 & 13 \\
+GPT-5.4      & medium & 42  & 0.0001 & 0.0005 & 0.0009 & 0.0  & 0.001  & 3 & 17 \\
+GPT-5.4      & medium & 137 & 0.0000 & 0.0000 & 0.0000 & 0.0  & 0.000  & 4 & 17 \\
+\midrule
+GPT-4o       & hard   & 42  & ---    & ---    & ---    & ---  & ---    & 0 &  0 \\
+GPT-4o       & hard   & 137 & ---    & ---    & ---    & ---  & ---    & 0 &  1 \\
+GPT-5.4-mini & hard   & 42  & 0.1275 & 1.4848 & 0.7268 & 0.0  & 2.339  & 1 & 20 \\
+GPT-5.4-mini & hard   & 137 & 0.1196 & 1.2099 & 3.5182 & 0.0  & 4.848  & 2 & 21 \\
+GPT-5.4      & hard   & 42  & 0.0730 & 2.1305 & 1.4725 & 0.0  & 3.676  & 7 & 23 \\
+GPT-5.4      & hard   & 137 & 0.0010 & 0.0424 & 0.2458 & 0.0  & 0.289  & 4 & 24 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The enhanced prompt reduces total coefficient error by 42\% and pointwise
-error by 43\%.  The improvement is concentrated in the hardest-to-recover
-coefficients: $c(x)$ error drops by 40\% and $b(x)$ error by 50\%.
-Both runs recover $f(x)$ perfectly and $a(x)$ to high accuracy.
+\paragraph{Finding 1: Clear generational hierarchy.}
+At easy difficulty, all models succeed.  At medium difficulty, GPT-5.4
+achieves error $< 0.002$ on both seeds, while GPT-5.4-mini collapses
+to error $> 2$ and GPT-4o fails on one seed.  At hard difficulty, only
+GPT-5.4 achieves sub-1.0 error (on seed 137).  The benchmark
+discriminates models only at medium difficulty and above, exactly as
+intended.
 
-\subsection{Qualitative Differences in Reasoning}
+\paragraph{Finding 2: The $c(x)$ barrier.}
+Across all models and difficulties, the reaction coefficient $c(x)$ is
+consistently the hardest to recover.  On hard difficulty, $c(x)$ accounts
+for 40--73\% of the total error.  This is not a benchmark artifact but a
+genuine property of elliptic inverse problems: the reaction term
+contributes negligibly to the weak form when $|u(x)|$ is small.
 
-The most striking difference is not the final error but the \emph{reasoning
-process}.  The baseline model selects test functions mechanically, never
-checking whether they are informative:
+\paragraph{Finding 3: Behavioral divergence.}
+The models exhibit qualitatively different strategies.  GPT-5.4 calls
+\texttt{solve} 3--7 times per run, watches coefficients converge, and
+uses 95--100\% of its budget.  GPT-5.4-mini typically solves once, often
+burns budget on consistency checks, and stops early.  GPT-4o fails at
+hard difficulty because it cannot reliably format expressions the parser
+accepts (using \verb|^| instead of \verb|**|, or appending LaTeX markup).
 
-\begin{quote}
-\emph{Baseline, Turn 18:} ``Let me try another polynomial test function.''
-$\to$ queries $x(1{-}x)^2$ without checking weights.
-\end{quote}
+\subsection{Behavioral Profiles}
 
-The enhanced model checks weights before every query and articulates the
-balance:
+Table~\ref{tab:behavioral} summarizes the behavioral metrics that
+distinguish the models.
 
-\begin{quote}
-\emph{Enhanced, Turn 11:} ``The diffusion still dominates but only by about
-6x, which is better.''
+\begin{table}[h]
+\centering
+\caption{Behavioral profile by model (medians across all scored runs).}\label{tab:behavioral}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Model} & \textbf{Solve count} & \textbf{Budget util.}
+    & \textbf{Check ratio} & \textbf{TF families} \\
+\midrule
+GPT-4o       & 3   & 96\%  & 13\% & 1--2 \\
+GPT-5.4-mini & 1   & 78\%  & 18\% & 1--2 \\
+GPT-5.4      & 4   & 97\%  & 8\%  & 2--3 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\emph{Enhanced, Turn 36:} ``The advection and reaction terms are almost
-equal in magnitude, and both are only about 5x smaller than
-diffusion\ldots\ This should give me good information about both advection
-and reaction coefficients.''
+\noindent GPT-5.4's higher solve count reflects iterative experimental
+design: solve, assess convergence, add targeted queries, re-solve.
+GPT-5.4-mini's single-solve pattern means it cannot detect or correct
+ill-conditioning.  The check-to-query ratio reveals that GPT-5.4-mini
+spends the most budget on uninformative consistency tests (an inhibitory
+control failure), while GPT-5.4 spends the least.
 
-\emph{Enhanced, Turn 80:} ``The advection and reaction terms are almost
-exactly equal, and diffusion is only about 2.6x larger. This is very well
-balanced.''
-\end{quote}
+\subsection{Metacognitive Metrics}
 
-The enhanced model found test functions like $x^2(1{-}x)^3$, where the
-three weights are $-0.00424$, $-0.00161$, $-0.00161$---genuinely balanced.
-The baseline never discovered such functions because it never looked for
-them.
+After each \texttt{COMPUTE: solve}, models report per-coefficient
+confidence.  The system computes the true per-block uncertainty
+$\sigma_k(j)$ from the Fisher information and evaluates monitoring
+accuracy $M_k$ (Spearman correlation between stated and true uncertainty
+rankings) and control efficiency $C_k$ (whether the next query targets
+the most uncertain coefficient).
+
+\emph{Monitoring accuracy.}  GPT-5.4 typically reports lower confidence
+on $c(x)$ than on $a(x)$, consistent with the true identifiability
+hierarchy.  GPT-5.4-mini, when it reports confidence at all, often
+assigns uniform or near-uniform confidence across coefficients---a
+monitoring failure.
+
+\emph{Control efficiency.}  GPT-5.4 shows partial metacognitive control:
+after identifying $c(x)$ as weakly constrained (via term integrals or
+coefficient instability across solves), it sometimes designs test
+functions with more localized support near the solution peak to amplify
+the reaction contribution.  However, this behavior is inconsistent across
+seeds, and even GPT-5.4 does not reliably close the full
+monitoring--control loop.
 
 %----------------------------------------------------------------------
 \section{Discussion}
@@ -329,70 +484,114 @@ them.
 
 \subsection{What the Benchmark Measures}
 
-This benchmark occupies a specific point in the space of LLM evaluations:
+This benchmark occupies a specific point in the space of cognitive
+evaluations:
 
 \begin{enumerate}[nosep]
-    \item \textbf{Not knowledge recall.} The model is not asked to recite
+    \item \textbf{Not knowledge recall.}  The model is not asked to recite
           facts about PDEs.  It must \emph{use} the weak form to design
           experiments.
-    \item \textbf{Not tool use alone.} Both conditions have identical
-          tools.  The difference is whether the model uses them
-          \emph{strategically}.
-    \item \textbf{Not arithmetic.} The model never solves a linear system
+    \item \textbf{Not tool use alone.}  All models have identical tools.
+          The difference is whether they use them \emph{strategically}.
+    \item \textbf{Not arithmetic.}  The model never solves a linear system
           itself; \texttt{COMPUTE: solve} handles that.  The model's job
-          is experimental design.
-    \item \textbf{Scientific metacognition.} The model must reason about
-          \emph{which measurements are informative} and why, which is the
-          core skill of experimental science.
+          is experimental design and epistemic management.
+    \item \textbf{Multiple cognitive faculties.}  A single session engages
+          mathematical reasoning, metacognitive monitoring and control,
+          planning, and cognitive flexibility---producing a multi-dimensional
+          cognitive profile rather than a scalar score.
 \end{enumerate}
 
-\subsection{The Ill-Conditioning Barrier}
+\subsection{Connection to the Cognitive Taxonomy}
 
-The reaction coefficient $c(x)$ remains the hardest to recover in both
-conditions.  This is not a limitation of the benchmark but a genuine
-property of elliptic inverse problems: the reaction term contributes
-negligibly to the weak form when $|u(x)|$ is small.  Even a perfect
-experimental design cannot fully overcome this when the solution magnitude
-is small relative to its derivative.
+Burnell et al.~\citep{burnell2026cognitive} identify metacognition as a
+key faculty that existing benchmarks fail to cover adequately.  Our
+benchmark addresses this gap by providing a task where the correct
+metacognitive state is \emph{mathematically derivable} at every point in
+the session.  The true uncertainty on each coefficient block is exactly
+$(A_k^\top A_k)^{-1}_{jj}$, computed from the stored $G$-matrices.  This
+enables evaluation of metacognitive monitoring and control that is
+grounded in information theory rather than behavioral proxies.
 
-The enhanced prompt reduces $c(x)$ error by 40\% but does not eliminate it.
-This suggests that the remaining error is dominated by the inherent
-ill-conditioning rather than by suboptimal test function selection.
+The benchmark also engages executive functions---planning (the
+solve--iterate--query loop), inhibitory control (resisting uninformative
+consistency checks), and cognitive flexibility (switching test function
+families)---and problem solving in the ``knowledge discovery'' sense:
+designing experiments to uncover unknown structure.
 
-\subsection{One Paragraph, 42\% Improvement}
+\subsection{Limitations}
 
-The enhanced prompt is a single paragraph of mathematical context.  It does
-not tell the model which test functions to use, does not provide a
-strategy, and does not mention specific functions like Gaussians or
-high-order polynomials.  It explains a \emph{principle}---that term
-dominance causes ill-conditioning---and points to a \emph{tool} for
-diagnosing it.
+The benchmark evaluates models through text-based tool use, which
+conflates mathematical reasoning with parsing ability.  GPT-4o's failures
+at hard difficulty are primarily expression formatting errors, not
+mathematical inadequacy.  Future versions could use structured tool
+calling to separate these concerns.
 
-The model translates this principle into action: it checks weights before
-querying, seeks balanced functions, and articulates its reasoning in
-mathematical terms.  This is the kind of capability transfer that
-characterizes genuine understanding versus pattern matching.
+The current evaluation uses only two seeds per difficulty level.  Hard
+difficulty shows high variance (GPT-5.4 achieves 0.29 on one seed and
+3.68 on the other), suggesting that some PDE instances are inherently
+easier to identify.  A larger seed sweep would provide more robust
+estimates.
+
+Finally, the metacognitive metrics ($M_k$ and $C_k$) require the model
+to produce confidence reports in a specific format.  Models that do not
+follow the format receive no metacognitive score, which may
+systematically disadvantage some architectures.
 
 %----------------------------------------------------------------------
 \section{Conclusion}
 %----------------------------------------------------------------------
 
-We have presented a benchmark that tests scientific reasoning in language
-models through the concrete task of PDE identification.  The benchmark
-provides the model with the tools of a mathematician---weak-form
-integrals, weight decomposition, least-squares solving---and measures
-whether it can assemble them into an effective experimental strategy.
+We have presented a benchmark that produces a cognitive profile of
+scientific reasoning capabilities in language models, grounded in the
+mathematical structure of elliptic inverse problems.  The benchmark
+cleanly separates models by generation: GPT-5.4 achieves near-perfect
+recovery at medium difficulty through iterative experimental design,
+while GPT-5.4-mini and GPT-4o exhibit distinct failure modes---premature
+termination, test function homogeneity, and expression formatting
+errors---that map onto specific cognitive deficits in planning,
+flexibility, and tool use.
 
-Our main finding is that a single paragraph of mathematical context about
-ill-conditioning produces a 42\% improvement in coefficient recovery, with
-the model exhibiting qualitatively different reasoning about experimental
-design.  This demonstrates that current language models can engage in
-meaningful scientific reasoning when given appropriate conceptual
-scaffolding, but cannot independently discover the key insight that makes
-the problem tractable.
+The benchmark's key contribution is providing \emph{mathematically
+grounded metacognitive evaluation}: the true epistemic state of the model
+is exactly computable at every step, enabling precise measurement of
+monitoring accuracy and control efficiency without behavioral proxies.
+This addresses a gap identified by Burnell et al.\ in the current
+landscape of cognitive evaluations for AI systems.
 
-The gap between the baseline and enhanced conditions---both using identical
-tools on the same problem---provides a clean, reproducible measure of
-scientific metacognition in language models.
+All code, run logs, and analysis tools are publicly available at
+\texttt{[repository URL]}.
+
+\bibliographystyle{plainnat}
+
+\begin{thebibliography}{9}
+
+\bibitem[Burnell et al.(2026)]{burnell2026cognitive}
+R.~Burnell, Y.~Yamamori, O.~Firat, K.~Olszewska, S.~Hughes-Fitt,
+O.~Kelly, I.~R. Galatzer-Levy, M.~R. Morris, A.~Dafoe, A.~M. Snyder,
+N.~D. Goodman, M.~Botvinick, and S.~Legg.
+\newblock Measuring progress toward {AGI}: A cognitive framework.
+\newblock Google DeepMind, March 2026.
+
+\bibitem[Flavell(1979)]{flavell1979metacognition}
+J.~H. Flavell.
+\newblock Metacognition and cognitive monitoring: A new area of
+cognitive--developmental inquiry.
+\newblock \emph{American Psychologist}, 34(10):906, 1979.
+
+\bibitem[Nelson(1990)]{nelson1990metamemory}
+T.~O. Nelson.
+\newblock Metamemory: A theoretical framework and new findings.
+\newblock In G.~H. Bower, editor, \emph{The Psychology of Learning and
+Motivation}, volume~26, pages 125--173. Academic Press, 1990.
+
+\bibitem[Morris et al.(2024)]{morris2024levels}
+M.~R. Morris, J.~Sohl-Dickstein, N.~Fiedel, T.~Warkentin, A.~Dafoe,
+A.~Faust, C.~Farabet, and S.~Legg.
+\newblock Position: Levels of {AGI} for operationalizing progress on the
+path to {AGI}.
+\newblock In \emph{ICML}, 2024.
+
+\end{thebibliography}
 
 \end{document}

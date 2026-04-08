@@ -1,14 +1,15 @@
 """
-Probe-only PDE identification benchmark.
+PDE identification benchmark — main entry point.
 
-A stripped-down alternative to llm_loop.py. The LLM receives solution data,
-can query weak-form integrals (QUERY), evaluate the solution (COMPUTE), and
-submit a coefficient prediction (PREDICT).
+The LLM receives solution data, can query weak-form integrals (QUERY),
+evaluate the solution (COMPUTE), and submit a coefficient prediction (PREDICT).
+Solve results show per-coefficient deltas from the previous solve to help
+the model track convergence.
 
 Usage:
-    python probe_loop.py --mock                       # run with mock LLM
-    python probe_loop.py --difficulty medium --seed 42
-    python probe_loop.py --mock --save-transcript out.txt
+    python main_loop.py --mock                       # run with mock LLM
+    python main_loop.py --difficulty medium --seed 42
+    python main_loop.py --mock --save-transcript out.txt
 """
 
 from __future__ import annotations
@@ -116,21 +117,21 @@ Available commands:
                                                        Each QUERY automatically stores all information needed for
                                                        COMPUTE: solve — you do not need to compute term integrals
                                                        manually before solving.
-    COMPUTE: verify <expression>                     → compares your estimated LHS (â·∫u'φ'+b̂·∫u'φ'+ĉ·∫uφ)
-                                                       to the actual ∫f·φ dx. Large discrepancy means your
-                                                       coefficients are wrong. Costs 1 query. Also adds this
-                                                       test function to your data for future COMPUTE: solve.
-                                                       (costs 1 query, requires solve first)
+    COMPUTE: check <expression>                      → consistency check: computes predicted LHS from your
+                                                       current â,b̂,ĉ and compares to actual ∫f·φ dx for a NEW
+                                                       test function. Zero discrepancy does NOT prove correctness —
+                                                       it only means this test function is consistent with your
+                                                       current fit. Costs 1 query. Also adds this test function
+                                                       to your data for future COMPUTE: solve.
+                                                       (requires solve first)
     COMPUTE: term_integral <type> <expression>       → returns one weight integral (free)
         diffusion: ∫ u'(x)·φ'(x) dx
         advection: ∫ u'(x)·φ(x) dx
         reaction:  ∫ u(x)·φ(x) dx
 
-    PREDICT:                                         → submit your answer
-        a_coeffs = [...]
-        b_coeffs = [...]
-        c_coeffs = [...]
-        f_coeffs = [...]
+    PREDICT:                                         → end the session and submit your current
+                                                       COMPUTE: solve coefficients as your answer.
+                                                       (requires solve first)
 
 You have {self.max_queries} queries. Your score depends on both accuracy and efficiency.
 """
@@ -445,29 +446,6 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
 # Parsing
 # ---------------------------------------------------------------------------
 
-def _parse_prediction(text: str) -> Optional[dict]:
-    """
-    Extract coefficient arrays from prediction text.
-
-    Looks for patterns like:
-        a_coeffs = [1.0, 0.5, -0.3]
-        a = [1.0, 0.5, -0.3]
-    """
-    result = {}
-    for key in ["a", "b", "c", "f"]:
-        # Try "X_coeffs = [...]" or "X = [...]"
-        pattern = rf'{key}(?:_coeffs)?\s*=\s*\[([^\]]+)\]'
-        m = re.search(pattern, text, re.IGNORECASE)
-        if m:
-            try:
-                vals = [float(v.strip()) for v in m.group(1).split(",")]
-                result[key] = vals
-            except ValueError:
-                return None
-        else:
-            return None
-    return result
-
 
 def parse_probe_response(text: str) -> list[dict]:
     """Parse LLM response into actions: query, compute, predict, reasoning."""
@@ -487,17 +465,8 @@ def parse_probe_response(text: str) -> list[dict]:
             i += 1
             continue
         if re.match(r'^PREDICT:', line, re.IGNORECASE):
-            pred_lines = []
+            actions.append({"action": "predict"})
             i += 1
-            while i < len(lines):
-                pred_lines.append(lines[i])
-                i += 1
-            pred_text = "\n".join(pred_lines)
-            prediction = _parse_prediction(pred_text)
-            if prediction:
-                actions.append({"action": "predict", **prediction})
-            else:
-                actions.append({"action": "reasoning", "text": f"PREDICT:\n{pred_text}  [could not parse]"})
             continue
         if line:
             actions.append({"action": "reasoning", "text": line})
@@ -526,7 +495,7 @@ def format_eval_solution(response: dict) -> str:
     return f"Error: {response['message']}"
 
 
-def format_solve_result(response: dict) -> str:
+def format_solve_result(response: dict, prev_coeffs: dict = None) -> str:
     if response["status"] != "ok":
         return f"Error: {response['message']}"
     lines = [
@@ -540,14 +509,26 @@ def format_solve_result(response: dict) -> str:
         tc = response["type_counts"]
         parts = [f"{v} {k}" for k, v in tc.items() if v > 0]
         lines.append(f"  Test functions used: {', '.join(parts)}")
+    # Show deltas from previous solve so model can assess convergence
+    if prev_coeffs is not None:
+        deltas = {}
+        for key in ["a", "b", "c", "f"]:
+            prev = prev_coeffs.get(key, [])
+            curr = response.get(f"{key}_coeffs", [])
+            if prev and curr and len(prev) == len(curr):
+                max_delta = max(abs(c - p) for c, p in zip(curr, prev))
+                deltas[key] = max_delta
+        if deltas:
+            delta_parts = [f"{k}={v:.2e}" for k, v in deltas.items()]
+            lines.append(f"  Max coeff change from prev solve: {', '.join(delta_parts)}")
     return "\n".join(lines)
 
 
-def format_verify_result(response: dict) -> str:
+def format_check_result(response: dict) -> str:
     if response["status"] != "ok":
         return f"Error: {response['message']}"
     return (
-        f"Verification for '{response['spec']}':\n"
+        f"Consistency check for '{response['spec']}':\n"
         f"  Predicted LHS (â·∫u'φ' + b̂·∫u'φ + ĉ·∫uφ) = {response['predicted_lhs']:+.12f}\n"
         f"  Actual    ∫f·φ dx                           = {response['actual_f_phi']:+.12f}\n"
         f"  Discrepancy:                                  {response['discrepancy']:.6e}\n"
@@ -634,13 +615,22 @@ class OpenAIBackend:
         self.max_tokens = max_tokens
 
     def chat(self, system: str, messages: list[dict]) -> str:
+        import openai as _openai
         openai_messages = [{"role": "system", "content": system}] + messages
-        response = self.client.chat.completions.create(
-            model=self.model,
-            max_completion_tokens=self.max_tokens,
-            messages=openai_messages,
-        )
-        return response.choices[0].message.content
+        for attempt in range(8):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    max_completion_tokens=self.max_tokens,
+                    messages=openai_messages,
+                )
+                return response.choices[0].message.content
+            except _openai.RateLimitError:
+                if attempt == 7:
+                    raise
+                wait = min(2 ** attempt * 5, 120)
+                print(f"\n  [rate limit, retry {attempt+1}/7 in {wait}s]", end=" ", flush=True)
+                time.sleep(wait)
 
 
 class MockBackend:
@@ -794,6 +784,8 @@ Then give one sentence explaining the main source of your uncertainty.
     messages = [{"role": "user", "content": initial_message}]
     turn = 0
     done = False
+    explicit_prediction = None
+    _prev_solve_coeffs = {}  # track previous solve for delta display
 
     if verbose:
         print("=" * 70)
@@ -844,9 +836,16 @@ Then give one sentence explaining the main source of your uncertainty.
                         resp = {"status": "error",
                                 "message": f"Need at least {min_queries} queries before solving "
                                            f"({session.queries_used} collected so far)."}
+                        prev = None
                     else:
+                        prev = _prev_solve_coeffs.copy() if _prev_solve_coeffs else None
                         resp = session.solve()
-                    result_text = format_solve_result(resp)
+                    result_text = format_solve_result(resp, prev_coeffs=prev)
+                    if resp.get("status") == "ok":
+                        _prev_solve_coeffs.update({
+                            "a": resp["a_coeffs"], "b": resp["b_coeffs"],
+                            "c": resp["c_coeffs"], "f": resp["f_coeffs"],
+                        })
                     if run_log is not None and resp.get("status") == "ok":
                         pde = session.pde
                         a_err = float(np.mean(np.abs(np.array(resp["a_coeffs"]) - pde.a.coeffs)))
@@ -879,14 +878,27 @@ Then give one sentence explaining the main source of your uncertainty.
                             "f_error": f_err,
                             "total_error": a_err + b_err + c_err + f_err,
                         })
-                elif cmd.startswith("verify"):
-                    cmd_args = cmd[len("verify"):].strip()
+                elif cmd.startswith("check") or cmd.startswith("verify"):
+                    keyword = "check" if cmd.startswith("check") else "verify"
+                    cmd_args = cmd[len(keyword):].strip()
                     if not cmd_args:
-                        result_text = "Usage: COMPUTE: verify <expression>"
+                        result_text = "Usage: COMPUTE: check <expression>"
                         resp = None
                     else:
                         resp = session.verify(cmd_args)
-                        result_text = format_verify_result(resp)
+                        result_text = format_check_result(resp)
+                        # Warn if system was exactly determined at last solve
+                        if resp.get("status") == "ok" and resp.get("discrepancy", 1) < 1e-10:
+                            n_eqs = len([r for r in session.history if "_G_diff" in r]) - 1  # minus this check
+                            n_unk = 4 * session.basis.n_basis
+                            if n_eqs <= n_unk:
+                                result_text += (
+                                    f"\n  ⚠ Note: with {n_eqs} equations for {n_unk} unknowns, "
+                                    f"the system was exactly determined or underdetermined at last solve. "
+                                    f"Zero discrepancy is expected and does NOT confirm correctness — "
+                                    f"any solution to the linear system will satisfy test functions "
+                                    f"in the span of your queries."
+                                )
                     if run_log is not None and resp is not None and resp.get("status") == "ok":
                         run_log["verifications"].append({
                             "turn": turn,
@@ -914,7 +926,7 @@ Then give one sentence explaining the main source of your uncertainty.
                             "timestamp": time.time(),
                         })
                 else:
-                    result_text = f"Unknown command: '{cmd}'. Available: eval_solution, solve, verify, term_integral"
+                    result_text = f"Unknown command: '{cmd}'. Available: eval_solution, solve, check, term_integral"
                 result_parts.append(result_text)
                 if verbose:
                     print(f"  → {result_text}\n")
@@ -951,13 +963,17 @@ Then give one sentence explaining the main source of your uncertainty.
                            f"Submit at least {min_queries} queries before predicting "
                            f"to ensure the system is well-overdetermined.")
                     result_parts.append(msg)
+                elif session.last_solve_coeffs is None:
+                    msg = "No COMPUTE: solve has been run yet. Call COMPUTE: solve before PREDICT."
+                    result_parts.append(msg)
                 else:
-                    prediction = {k: act[k] for k in ["a", "b", "c", "f"]}
+                    prediction = session.last_solve_coeffs
                     result = session.submit_prediction(prediction)
                     if result["status"] == "scored":
                         score_text = format_score_result(result)
                         result_parts.append(score_text)
                         done = True
+                        explicit_prediction = prediction
                         if verbose:
                             print(f"\n{score_text}\n")
                     else:
@@ -977,7 +993,7 @@ Then give one sentence explaining the main source of your uncertainty.
         if session.queries_used >= session.max_queries and not session.prediction_submitted:
             messages.append({
                 "role": "user",
-                "content": f"Budget exhausted ({session.max_queries} queries). Submit PREDICT: now."
+                "content": f"Budget exhausted ({session.max_queries} queries). Call COMPUTE: solve if you haven't, then submit PREDICT: to end the session."
             })
 
     output = {
@@ -988,16 +1004,29 @@ Then give one sentence explaining the main source of your uncertainty.
     }
     if session.final_score:
         output["score"] = session.final_score.to_dict()
+    if explicit_prediction is not None:
+        output["prediction"] = explicit_prediction
 
-    # Extract prediction from last assistant message
-    for msg in reversed(messages):
-        if msg["role"] == "assistant":
-            for act in reversed(parse_probe_response(msg["content"])):
-                if act["action"] == "predict":
-                    output["prediction"] = {k: act[k] for k in ["a", "b", "c", "f"]}
-                    break
-        if "prediction" in output:
-            break
+    # Auto-submit from best solve if model never predicted (or ran out of turns)
+    if not session.prediction_submitted and session.last_solve_coeffs is not None:
+        if verbose:
+            print("(Auto-submitting from last COMPUTE: solve result)")
+        prediction = session.last_solve_coeffs
+        result = session.submit_prediction(prediction)
+        if result["status"] == "scored":
+            output["score"] = result["score"].to_dict() if hasattr(result["score"], "to_dict") else result["score"]
+            output["prediction"] = prediction
+            output["prediction_submitted"] = True
+            output["auto_submitted"] = True
+            if verbose:
+                print(format_score_result(result))
+
+    # Also compute what the best solve would have scored (for analysis)
+    if run_log is not None and run_log["solves"]:
+        best_solve = min(run_log["solves"], key=lambda s: s["coeff_errors"]["total"])
+        output["best_solve_error"] = best_solve["coeff_errors"]["total"]
+        output["best_solve_number"] = best_solve["solve_number"]
+        output["best_solve_queries"] = best_solve["queries_at_solve"]
 
     output["efficiency"] = compute_efficiency_curve(session)
     return output
@@ -1301,12 +1330,24 @@ def main():
         "queries_used": result["queries_used"],
         "budget_utilization": result["queries_used"] / max_queries,
         "solve_count": len(run_log["solves"]),
-        "verify_count": len(run_log["verifications"]),
+        "check_count": len(run_log["verifications"]),
         "term_integral_count": len(run_log["term_integrals"]),
         "stopped_early": result["queries_used"] < max_queries,
         "unused_queries": max_queries - result["queries_used"],
         "coefficient_stability": _compute_stability(run_log["solves"]),
+        "auto_submitted": result.get("auto_submitted", False),
     }
+
+    # Track best solve vs submitted prediction for analysis
+    if run_log["solves"]:
+        best_solve = min(run_log["solves"], key=lambda s: s["coeff_errors"]["total"])
+        run_log["behavioral_metrics"]["best_solve_error"] = best_solve["coeff_errors"]["total"]
+        run_log["behavioral_metrics"]["best_solve_number"] = best_solve["solve_number"]
+        run_log["behavioral_metrics"]["submitted_error"] = (
+            run_log["results"]["coefficient_errors"]["total"]
+            if run_log.get("results") and run_log["results"].get("coefficient_errors")
+            else None
+        )
 
     model_slug = args.model.replace("/", "_")
     run_stem = (

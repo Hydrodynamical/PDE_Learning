@@ -496,3 +496,155 @@ def plot_session_results(session, prediction: dict, save_path: str = None) -> pl
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
 
     return fig
+
+
+def plot_metacognitive_metrics(metrics: dict,
+                               session,
+                               model_name: str,
+                               save_path: str = None):
+    """
+    Three-panel metacognitive profile figure.
+
+    Panel 1: Relative uncertainty σ_k(j)/σ_k(a) — conditioning gap over time.
+    Panel 2: Stated confidence vs. true accuracy at each solve call.
+    Panel 3: Control efficiency C_k, colored by most-uncertain coefficient.
+    """
+    import matplotlib.patches as mpatches
+    from matplotlib.lines import Line2D
+
+    sigma_curves = metrics["sigma_curves"]
+    control      = metrics["control"]
+    conf_reports = metrics["confidence_reports"]
+
+    colors = {"a": "steelblue", "b": "darkorange", "c": "firebrick", "f": "forestgreen"}
+
+    # Ground truth final errors per coefficient
+    if session.final_score:
+        true_errors = {
+            "a": session.final_score.coeff_error_a,
+            "b": session.final_score.coeff_error_b,
+            "c": session.final_score.coeff_error_c,
+            "f": session.final_score.coeff_error_f,
+        }
+    else:
+        true_errors = {"a": 1.0, "b": 1.0, "c": 1.0, "f": 1.0}
+
+    total_error = sum(true_errors.values())
+    fig, axes = plt.subplots(3, 1, figsize=(10, 13))
+    fig.suptitle(f"Metacognitive Profile — {model_name}\n"
+                 f"Final error: {total_error:.4f}",
+                 fontsize=13, fontweight="bold")
+
+    # ------------------------------------------------------------------
+    # Panel 1: Relative uncertainty σ_k(j) / σ_k(a)
+    # ------------------------------------------------------------------
+    ax = axes[0]
+    ks = [s["k"] for s in sigma_curves]
+    sig_a = np.array([s["sigma_a"] for s in sigma_curves])
+    sig_b = np.array([s["sigma_b"] for s in sigma_curves])
+    sig_c = np.array([s["sigma_c"] for s in sigma_curves])
+    safe_a = np.where(sig_a > 0, sig_a, np.nan)
+    ax.plot(ks, sig_b / safe_a, color=colors["b"], linewidth=2,
+            label="σ(b)/σ(a) advection")
+    ax.plot(ks, sig_c / safe_a, color=colors["c"], linewidth=2,
+            label="σ(c)/σ(a) reaction")
+    ax.axhline(1.0, color="gray", linestyle="--", linewidth=1,
+               label="Equal conditioning (ratio=1)")
+    for sk in [r["query_count"] for r in conf_reports]:
+        ax.axvline(sk, color="purple", linestyle=":", alpha=0.5, linewidth=1)
+    ax.set_yscale("log")
+    ax.set_ylabel("Relative uncertainty σ_k(j) / σ_k(a)", fontsize=10)
+    ax.set_title("Panel 1: Conditioning gap over time\n"
+                 "(ratio > 1 = harder to recover than diffusion; "
+                 "purple dashed = solve call)", fontsize=9)
+    ax.legend(fontsize=9)
+    ax.set_xlabel("Queries submitted")
+
+    # ------------------------------------------------------------------
+    # Panel 2: Stated confidence vs. true accuracy per coefficient
+    # ------------------------------------------------------------------
+    ax = axes[1]
+    if conf_reports:
+        coeffs = ["a", "b", "c", "f"]
+        bar_width = 0.18
+        x_pos = np.arange(len(conf_reports))
+
+        def error_to_accuracy(err):
+            return 1.0 / (1.0 + err) if err > 0 else 1.0
+
+        true_acc = {k: error_to_accuracy(true_errors[k]) for k in coeffs}
+
+        for i, coeff in enumerate(coeffs):
+            stated = [r[coeff] for r in conf_reports]
+            offset = (i - 1.5) * bar_width
+            bars = ax.bar(x_pos + offset, stated, bar_width, alpha=0.8,
+                          color=colors[coeff])
+            t = true_acc[coeff]
+            for j, (s, bar) in enumerate(zip(stated, bars)):
+                ax.plot([x_pos[j] + offset - bar_width/2,
+                         x_pos[j] + offset + bar_width/2],
+                        [t, t], color="black", linewidth=2)
+                bar.set_edgecolor("red" if s > t + 0.1 else "black")
+                bar.set_linewidth(2)
+
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels([f"Solve @q{r['query_count']}"
+                            for r in conf_reports], fontsize=9)
+        ax.set_ylim(0, 1.15)
+        ax.set_ylabel("Confidence / Accuracy (0–1)", fontsize=10)
+        ax.set_title("Panel 2: Stated confidence (bars) vs. true accuracy (black lines)\n"
+                     "(Red border = overconfident)", fontsize=9)
+        patch_list = [mpatches.Patch(color=colors[c], label=c) for c in coeffs]
+        ax.legend(handles=patch_list, fontsize=9, ncol=4,
+                  title="Coefficient", loc="upper right")
+    else:
+        ax.text(0.5, 0.5,
+                "No confidence reports found\n"
+                "(model did not emit 'Confidence: a=XX%, b=XX%, c=XX%, f=XX%')",
+                ha="center", va="center", transform=ax.transAxes, fontsize=10)
+        ax.set_title("Panel 2: Calibration (no data)")
+
+    # ------------------------------------------------------------------
+    # Panel 3: Control efficiency C_k
+    # ------------------------------------------------------------------
+    ax = axes[2]
+    if control:
+        ks_c    = [c["k"]      for c in control]
+        C_ks    = [c["C_k"]    for c in control]
+        j_stars = [c["j_star"] for c in control]
+        dot_colors = [colors[j] for j in j_stars]
+        ax.scatter(ks_c, C_ks, c=dot_colors, s=60, zorder=3)
+        ax.axhline(1.0, color="green", linestyle="--", linewidth=0.8,
+                   label="Perfect control")
+        ax.axhline(0.5, color="gold", linestyle="--", linewidth=0.8,
+                   label="<50% of possible gain on j*")
+        ax.axhline(0.0, color="gray", linestyle="--", linewidth=0.8)
+        for k, C, j in zip(ks_c, C_ks, j_stars):
+            if C < 0.5:
+                ax.annotate(f"targeting {j}\ngot {C:.2f}",
+                            xy=(k, C), xytext=(k + 0.3, C + 0.08),
+                            fontsize=7, color=colors[j],
+                            arrowprops=dict(arrowstyle="-", color="gray", lw=0.8))
+        ax.set_ylim(-0.05, 1.15)
+        ax.set_ylabel("Control efficiency C_k", fontsize=10)
+        ax.set_title("Panel 3: Control efficiency — did queries target the most uncertain coefficient?\n"
+                     "(color = most uncertain coeff at that step)", fontsize=9)
+        legend_elements = [
+            Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=colors["a"], markersize=8, label="j*=a (diffusion)"),
+            Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=colors["b"], markersize=8, label="j*=b (advection)"),
+            Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=colors["c"], markersize=8, label="j*=c (reaction)"),
+        ]
+        ax.legend(handles=legend_elements, fontsize=9)
+    else:
+        ax.text(0.5, 0.5, "No control data",
+                ha="center", va="center", transform=ax.transAxes)
+        ax.set_title("Panel 3: Control efficiency (no data)")
+    ax.set_xlabel("Queries submitted")
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    return fig
