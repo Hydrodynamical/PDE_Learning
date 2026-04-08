@@ -13,7 +13,7 @@
 
 \title{\textbf{Can Language Models Learn a PDE?}\\[4pt]
 \large A Cognitive Benchmark for Scientific Reasoning\\via Weak-Form Identification of an Unknown Elliptic Equation}
-\author{}
+\author{Joseph K. Miller}
 \date{}
 
 \newcommand{\dd}{\,\mathrm{d}}
@@ -28,9 +28,10 @@ solution.  The model receives solution data, a budget of queries that return
 weak-form integrals, and free diagnostic tools---but must design its own
 experimental strategy: choosing test functions, interpreting results,
 diagnosing ill-conditioning, and iterating.  The task produces a
-\emph{cognitive profile} spanning five faculties from the Burnell et
+\emph{cognitive profile} spanning eight faculties from the Burnell et
 al.\ cognitive taxonomy: mathematical reasoning, metacognitive monitoring,
-metacognitive control, executive planning, and cognitive flexibility.  Each
+metacognitive control, executive planning, cognitive flexibility,
+in-context learning, attention, and goal maintenance.  Each
 faculty is measured by a dedicated, mathematically grounded metric with
 computable ground truth.  Across three OpenAI models (GPT-4o, GPT-5.4-mini,
 GPT-5.4) and three difficulty levels, we find a clear capability hierarchy:
@@ -73,7 +74,7 @@ reasoning: not all test functions are equally informative, and a model that
 reasons about \emph{which measurements matter} will significantly
 outperform one that collects data mechanically.
 
-The benchmark produces a cognitive profile across five faculties, each
+The benchmark produces a cognitive profile across eight faculties, each
 measured by a dedicated metric with computable ground truth:
 
 \begin{enumerate}[nosep]
@@ -85,7 +86,14 @@ measured by a dedicated metric with computable ground truth:
     \item \textbf{Executive planning}: does the model iterate (multiple
           solves) or stop prematurely?
     \item \textbf{Cognitive flexibility}: can the model switch between test
-          function families when its current approach stalls?
+          function families, and does the diversification provide independent
+          information in the weak-form integral space?
+    \item \textbf{In-context learning}: does the model improve its coefficient
+          estimates across successive solves within a single session?
+    \item \textbf{Attention}: does the model stay focused, or does it waste
+          turns on unrecognized or malformed actions?
+    \item \textbf{Goal maintenance}: after solving, does the model submit
+          promptly, or drift into aimless exploration?
 \end{enumerate}
 
 %----------------------------------------------------------------------
@@ -166,10 +174,11 @@ stored queries.
 \paragraph{Solution evaluation (\texttt{COMPUTE: eval\_solution}).}
 Returns $u(x)$ and $u'(x)$ at arbitrary points.  Free.
 
-\paragraph{Term integral tool (\texttt{COMPUTE: term\_integral}).}
-Returns one of the three weight integrals ($\int u'\varphi'\dd x$,
-$\int u'\varphi\dd x$, $\int u\varphi\dd x$) for a candidate test function,
-allowing the model to assess informativeness \emph{before} spending a query.
+\paragraph{Term integral tool (\texttt{COMPUTE: term\_integrals}).}
+Returns all three weight integrals simultaneously---diffusion
+($\int u'\varphi'\dd x$), advection ($\int u'\varphi\dd x$), and reaction
+($\int u\varphi\dd x$)---for a candidate test function, allowing the model
+to assess the informativeness of each term \emph{before} spending a query.
 Free.
 
 \paragraph{Consistency check (\texttt{COMPUTE: check}).}
@@ -210,7 +219,7 @@ A baseline prompt without this context is available for ablation.
 The weak form~\eqref{eq:pde} produces one linear equation per test
 function, with three contributions on the left-hand side---diffusion,
 advection, and reaction---weighted by the integrals that the
-\texttt{term\_integral} tool returns.
+\texttt{term\_integrals} tool returns.
 
 For a typical test function, these weights have very different magnitudes.
 The diffusion weight involves $u'(x)\varphi'(x)$, where both factors are
@@ -238,14 +247,31 @@ reasons about which test functions amplify the reaction weight will do
 better on $c$.  This hierarchy is the core discriminating mechanism of
 the benchmark.
 
+Crucially, the benchmark provides a tool for overcoming this
+ill-conditioning: \texttt{COMPUTE: term\_integrals}.  This tool returns
+all three term weights simultaneously---$\int u'\varphi'\dd x$ (diffusion),
+$\int u'\varphi\dd x$ (advection), $\int u\varphi\dd x$
+(reaction)---for a candidate test function \emph{before} the model
+spends a query.  Since the tool is free and unlimited, the optimal
+strategy is to screen candidate test functions by their term weights,
+discarding those where the reaction weight $\int u\varphi\dd x$ is
+negligible relative to the diffusion weight, and committing a query only
+when the candidate provides meaningful constraint on the weakly
+identifiable coefficients.  Favorable test functions exist: concentrating
+$\varphi$ near the peak of $u(x)$ amplifies $\int u\varphi\dd x$, while
+choosing $\varphi$ with small derivatives suppresses $\int u'\varphi'\dd x$.
+The benchmark thus measures not only whether the model \emph{notices} the
+ill-conditioning, but whether it connects the diagnosis to the available
+tool and uses it for experimental design.
+
 %----------------------------------------------------------------------
 \section{Cognitive Profile: Metrics}
 \label{sec:metrics}
 %----------------------------------------------------------------------
 
 Following the cognitive taxonomy of Burnell et al.~\citep{burnell2026cognitive},
-we define five metrics that together constitute a \emph{cognitive profile}
-for each model.  A key advantage of this task is that the ground truth for
+we define metrics across eight cognitive faculties that together constitute
+a \emph{cognitive profile} for each model.  A key advantage of this task is that the ground truth for
 each metric is \emph{exactly computable} from the stored $G$-matrices at
 every point in the session, without requiring human judgment.
 
@@ -285,6 +311,13 @@ $M_k = 1$ means the model correctly ranks which coefficients are most
 uncertain.  $M_k \approx 0$ means no self-knowledge.  We report the
 session mean $\bar M$.
 
+Note that only the \emph{rankings} of $\sigma_k(j)$ enter the monitoring
+metric, not their magnitudes.  This is important because $\bigl(A_k^\top A_k\bigr)^{-1}$
+can be highly ill-conditioned---its diagonal entries may fluctuate by orders of
+magnitude as rows are added---but the rank ordering of the coefficient blocks is
+empirically stable.  The Spearman correlation is robust to this instability by
+construction.
+
 \subsection{Metacognitive Control: $C_k$}
 
 Monitoring is only useful if it drives behavior.  After query $k$, we
@@ -318,15 +351,93 @@ hallmark of scientific planning.  We report:
           uninformative verification instead of gathering new data).
 \end{itemize}
 
-\subsection{Cognitive Flexibility: Test Function Diversity}
+\subsection{Cognitive Flexibility: Family Entropy and Query Space Conditioning}
 
-The system classifies each test function into one of four families:
+The system classifies each test function into one of $K = 5$ families:
 polynomial ($x^m(1{-}x)^n$ products), trigonometric ($\sin$, $\cos$
-combinations), exponential ($e^{\alpha x}$ weighted), and localized
-(narrow-support functions).  A model that uses only polynomials---which
-are nearly collinear in the weak-form integral space---is exhibiting
-cognitive inflexibility.  We report the number of distinct families used
-and the entropy of the family distribution.
+combinations), exponential ($e^{\alpha x}$ weighted), localized
+(narrow-support functions), and other.  Let $p_i$ be the fraction of
+queries in family $i$.  The Shannon entropy
+\[
+    H = -\sum_{i=1}^{K} p_i \log_2 p_i
+\]
+ranges from $H = 0$ (all queries in one family; total inflexibility) to
+$H = \log_2 K \approx 2.32$ (uniform use of all five families).  We report
+the normalized entropy $H / \log_2 K \in [0,1]$ for comparability.
+
+Family entropy measures cognitive \emph{strategy}, but not whether
+diversification provided independent information.  To assess the latter,
+we decompose the query matrix $A$ into its three coefficient blocks
+$A_{\text{diff}}$, $A_{\text{adv}}$, $A_{\text{react}}$ (each $K \times N$,
+where $K$ is the number of queries and $N$ is the number of basis
+functions).  For each block we compute three SVD-derived quantities:
+\begin{itemize}[nosep]
+    \item \textbf{Log-volume}: $\sum_i \log s_i$ over nonzero singular
+          values---the log-volume of the image in coefficient space.
+    \item \textbf{Effective rank}: $|\{i : s_i > \varepsilon\}|$, where
+          $\varepsilon = 10^{-12}$.
+    \item \textbf{Condition number}: $s_1 / s_{\min}$, where $s_{\min}$
+          is the smallest nonzero singular value.
+\end{itemize}
+These two metrics are complementary: $H$ measures strategic diversity,
+while block conditioning measures the \emph{outcome} of that strategy.
+A model can have $H > 0$ but still fail if its trigonometric functions
+are collinear with its polynomials in the reaction subspace.
+
+\subsection{In-Context Learning: Improvement Ratio and Learning Rate}
+
+A model that calls \texttt{COMPUTE: solve} multiple times has the
+opportunity to learn from feedback within the session.  Let $E_1$ be the
+total coefficient error at the first solve, and $E_n$ at the last.  The
+\emph{improvement ratio} is
+\[
+    R = E_1 / E_n.
+\]
+$R > 1$ means the model improved by iterating; $R \gg 1$ indicates rapid
+within-session learning.  Models that call solve only once have $R = 1$
+by definition---they never receive feedback on which coefficient estimates
+changed and cannot adapt.
+
+We also report the \emph{learning rate}: the slope of $\log_{10}(E)$
+regressed on query count across all solve points.  A negative slope
+indicates consistent error reduction with additional data; a slope near
+zero indicates stagnation.  This metric maps onto Burnell et al.'s
+Learning faculty (\S7.4), specifically in-context learning within a
+single session.
+
+\subsection{Attention: Wasted Turn Fraction}
+
+We define a turn as \emph{wasted} if its \texttt{parsed\_actions} list
+contains no recognized action---no QUERY, COMPUTE, or PREDICT.  Such
+turns arise when the model produces malformed commands (e.g., using
+\texttt{\^{}} instead of \texttt{**} for exponentiation) or reasons at
+length without acting.  We report:
+\begin{itemize}[nosep]
+    \item \textbf{Wasted turn fraction}: wasted turns / total turns.
+          Values near zero indicate focused, efficient operation.
+    \item \textbf{Maximum unproductive streak}: the longest consecutive
+          run of wasted turns, which indicates sustained attention failure
+          rather than isolated errors.
+\end{itemize}
+This maps onto Burnell et al.'s Attention faculty (\S7.3), specifically
+sustained and selective attention.
+
+\subsection{Goal Maintenance: Post-Solve Drift}
+
+After obtaining a coefficient estimate via \texttt{COMPUTE: solve}, the
+model should either refine its strategy (add targeted queries, re-solve)
+or submit.  Failure to do either indicates goal drift.  We report:
+\begin{itemize}[nosep]
+    \item \textbf{Tail after last solve}: turns between the model's final
+          \texttt{COMPUTE: solve} and session end.  Long tails (${>}10$
+          turns) indicate the model lost sight of the submission objective.
+    \item \textbf{Maximum gap without progress}: the longest consecutive
+          stretch of turns (after the first solve) containing neither a
+          QUERY nor a \texttt{COMPUTE: solve}.  This isolates mid-session
+          drift, where the model explores without progressing.
+\end{itemize}
+This maps onto Burnell et al.'s Executive Functions faculty (\S7.8),
+specifically goal setting and maintenance (\S7.8.1).
 
 %----------------------------------------------------------------------
 \section{Experimental Design}
@@ -435,15 +546,18 @@ distinguish the models.
 
 \begin{table}[h]
 \centering
-\caption{Behavioral profile by model (medians across all scored runs).}\label{tab:behavioral}
-\begin{tabular}{lccccc}
+\caption{Full cognitive profile by model (medians across all scored runs).
+$H$ = normalized family entropy; $R$ = improvement ratio; $W$ = wasted
+turn fraction; Tail = turns after last solve.}\label{tab:behavioral}
+\small
+\begin{tabular}{lcccccccc}
 \toprule
-\textbf{Model} & \textbf{Solve count} & \textbf{Budget util.}
-    & \textbf{Check ratio} & \textbf{TF families} \\
+\textbf{Model} & \textbf{Solves} & \textbf{Budget} & \textbf{Check\%}
+    & $H$ & $R$ & $\bar M$ & $W$ & \textbf{Tail} \\
 \midrule
-GPT-4o       & 3   & 96\%  & 13\% & 1--2 \\
-GPT-5.4-mini & 1   & 78\%  & 18\% & 1--2 \\
-GPT-5.4      & 4   & 97\%  & 8\%  & 2--3 \\
+GPT-4o       & 3   & 96\%  & 13\% & 0.30 & 1.0 & --- & 0.05 & 1 \\
+GPT-5.4-mini & 1   & 78\%  & 18\% & 0.00 & 1.0 & 0.5 & 0.08 & 2 \\
+GPT-5.4      & 4   & 97\%  & 8\%  & 0.35 & 4.2 & 0.8 & 0.02 & 1 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -454,6 +568,34 @@ GPT-5.4-mini's single-solve pattern means it cannot detect or correct
 ill-conditioning.  The check-to-query ratio reveals that GPT-5.4-mini
 spends the most budget on uninformative consistency tests (an inhibitory
 control failure), while GPT-5.4 spends the least.
+
+\paragraph{Finding 4: The $H = 0$ / $C_k = 0.99$ dissociation.}
+GPT-5.4-mini medium runs show a striking dissociation: control efficiency
+$C_k \approx 0.99$ (the model's next query nominally targets the most
+uncertain coefficient) but normalized family entropy $H = 0$ (every query
+is polynomial).  This reveals that high $C_k$ is a necessary but not
+sufficient condition for good performance: the model is optimizing within
+the polynomial subspace, where all queries are nearly collinear in the
+reaction block.  The per-block SVD confirms this---the reaction block
+$A_{\text{react}}$ has effective rank 1 despite 17 queries, explaining
+why $E_c > 1.4$ persists even when $E_a < 0.2$.
+
+\paragraph{Finding 5: In-context learning gap.}
+GPT-5.4 achieves improvement ratios $R > 4$ on medium difficulty (error
+drops from $\sim\!0.5$ at first solve to $\sim\!0.001$ at last), while
+GPT-5.4-mini has $R = 1.0$ by construction (single solve).  The learning
+rate for GPT-5.4 is approximately $-0.10$ decades per query---consistent
+reduction across the session.  This is the clearest signal separating
+iterative from one-shot problem solvers.
+
+\paragraph{Finding 6: Attention and goal maintenance.}
+GPT-5.4 wastes fewer than 2\% of turns on unrecognized actions (median
+$W = 0.02$) and submits within 1--2 turns of its final solve (tail
+$\leq 2$).  GPT-4o's failures at hard difficulty correlate with higher
+wasted turn fractions ($W \approx 0.05$), where the expression parser
+rejects \texttt{\^{}}-style exponentiation.  GPT-5.4-mini shows no
+sustained goal drift but its short tail reflects early termination rather
+than prompt submission after convergence.
 
 \subsection{Metacognitive Metrics}
 
@@ -498,8 +640,9 @@ evaluations:
           is experimental design and epistemic management.
     \item \textbf{Multiple cognitive faculties.}  A single session engages
           mathematical reasoning, metacognitive monitoring and control,
-          planning, and cognitive flexibility---producing a multi-dimensional
-          cognitive profile rather than a scalar score.
+          planning, cognitive flexibility, in-context learning, attention,
+          and goal maintenance---producing an eight-dimensional cognitive
+          profile rather than a scalar score.
 \end{enumerate}
 
 \subsection{Connection to the Cognitive Taxonomy}
@@ -513,11 +656,15 @@ $(A_k^\top A_k)^{-1}_{jj}$, computed from the stored $G$-matrices.  This
 enables evaluation of metacognitive monitoring and control that is
 grounded in information theory rather than behavioral proxies.
 
-The benchmark also engages executive functions---planning (the
-solve--iterate--query loop), inhibitory control (resisting uninformative
-consistency checks), and cognitive flexibility (switching test function
-families)---and problem solving in the ``knowledge discovery'' sense:
-designing experiments to uncover unknown structure.
+The benchmark covers eight of the ten Burnell et al.\ faculties:
+mathematical reasoning, metacognitive monitoring, metacognitive control,
+executive planning (goal setting, inhibitory control), cognitive
+flexibility, in-context learning, attention, and goal maintenance.
+The two faculties not engaged are perception (no perceptual input) and
+social cognition (no multi-agent interaction)---absences that reflect
+the nature of the task rather than a design limitation.  Problem solving
+in the ``knowledge discovery'' sense (designing experiments to uncover
+unknown structure) spans all eight faculties simultaneously.
 
 \subsection{Limitations}
 
@@ -532,6 +679,13 @@ difficulty shows high variance (GPT-5.4 achieves 0.29 on one seed and
 3.68 on the other), suggesting that some PDE instances are inherently
 easier to identify.  A larger seed sweep would provide more robust
 estimates.
+
+GPT-5.2 and newer OpenAI models default to \texttt{reasoning\_effort:
+none}, which disables chain-of-thought reasoning.  All results reported
+here use \texttt{reasoning\_effort: medium}, set explicitly via the API.
+Runs without this override would likely perform significantly worse,
+particularly GPT-5.4-mini, and the results should not be compared to
+evaluations that use the default API setting.
 
 Finally, the metacognitive metrics ($M_k$ and $C_k$) require the model
 to produce confidence reports in a specific format.  Models that do not

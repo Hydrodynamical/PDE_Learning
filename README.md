@@ -55,13 +55,17 @@ The number of basis functions (and thus unknowns) scales with difficulty.
 | --- | --- | --- |
 | `QUERY: <expression>` | ∫f·φ dx | 1 query |
 | `COMPUTE: eval_solution x1 x2 ...` | u(x) and u'(x) at given points | free |
-| `COMPUTE: term_integral <type> <expr>` | ∫u'φ' dx, ∫u'φ dx, or ∫uφ dx | free |
+| `COMPUTE: term_integrals <expr>` | All three term weights at once: ∫u'φ' dx (diffusion), ∫u'φ dx (advection), ∫uφ dx (reaction) | free |
 | `COMPUTE: solve` | Least-squares coefficient recovery + delta from previous solve | free |
 | `COMPUTE: check <expression>` | Predicted LHS vs actual ∫fφ dx for a new test function | 1 query |
 | `PREDICT:` | End session and submit last `COMPUTE: solve` coefficients as answer | — |
 
 `COMPUTE: solve` shows per-coefficient change from the previous solve, so the
 model can tell when its estimates have converged.
+
+`COMPUTE: term_integrals` returns all three weights in a single call, making it
+easy to screen candidate test functions for reaction-term informativeness before
+spending a query.
 
 ---
 
@@ -90,7 +94,26 @@ run_<difficulty>_s<seed>_<model>_<timestamp>_auc.png
 
 The JSON log contains: full turn transcript, per-query records, per-solve
 coefficient estimates and errors vs ground truth, verifications, term integrals,
-efficiency error curves, final scores, ground truth, and behavioral metrics.
+efficiency error curves, final scores, ground truth, behavioral metrics, and
+metacognitive metrics.
+
+**Behavioral metrics** (in `behavioral_metrics`):
+
+| Field | Description |
+| --- | --- |
+| `learning_rate` | Slope of log₁₀(error) vs query count across solves (negative = improving) |
+| `improvement_ratio` | First-solve error / last-solve error (> 1 means within-session learning) |
+| `wasted_turns` / `wasted_turn_fraction` | Turns with no recognized action (malformed commands or pure reasoning) |
+| `max_unproductive_streak` | Longest consecutive run of wasted turns |
+| `tail_after_last_solve` | Turns between final solve and session end |
+| `max_gap_without_progress` | Longest stretch without a QUERY or COMPUTE: solve after the first solve |
+| `duplicate_queries` | Count of repeated test functions (working memory failures) |
+| `family_entropy` / `family_entropy_normalized` | Shannon entropy of test function family distribution (0 = all one family) |
+| `family_counts` | Per-family query counts (polynomial, trigonometric, exponential, localized, other) |
+| `query_space_blocks` | Per-block SVD analysis: effective rank, log-volume, condition number for diffusion/advection/reaction blocks |
+| `mean_monitoring_accuracy` | Mean Spearman correlation between stated and true uncertainty rankings ($\bar{M}$) |
+| `mean_control_efficiency` | Mean fraction of information gain on the most uncertain coefficient ($\bar{C}$) |
+| `n_confidence_reports` | Number of times the model reported per-coefficient confidence |
 
 Use `--output-dir runs/` to collect logs from multiple runs in one place.
 

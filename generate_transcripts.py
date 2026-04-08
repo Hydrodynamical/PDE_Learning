@@ -18,8 +18,10 @@ import numpy as np
 
 from main_loop import (
     ProbeSession, run_probe_session, compute_efficiency_curve,
-    OpenAIBackend, AnthropicBackend, MockBackend,
+    OpenAIBackend, AnthropicBackend, GeminiBackend, MockBackend,
     DIFFICULTY_CONFIG, _compute_stability, plot_auc_curves,
+    compute_metacognitive_metrics,
+    compute_extended_metrics,
 )
 
 
@@ -27,12 +29,12 @@ from main_loop import (
 
 MODELS = {
     # OpenAI — three generations for longitudinal comparison
-    "gpt-4o":       {"provider": "openai"},
-    "gpt-5.4-mini": {"provider": "openai"},
-    "gpt-5.4":      {"provider": "openai"},
+    "gpt-4o":       {"provider": "openai",    "reasoning_effort": None},
+    "gpt-5.4-mini": {"provider": "openai",    "reasoning_effort": "medium"},
+    "gpt-5.4":      {"provider": "openai",    "reasoning_effort": "medium"},
     # Anthropic (uncomment to include)
-    # "claude-sonnet-4-20250514": {"provider": "anthropic"},
-    # "claude-opus-4-6":          {"provider": "anthropic"},
+    # "claude-sonnet-4-20250514": {"provider": "anthropic", "reasoning_effort": None},
+    # "claude-opus-4-6":          {"provider": "anthropic", "reasoning_effort": None},
 }
 
 DEFAULT_MODELS = ["gpt-4o", "gpt-5.4-mini", "gpt-5.4"]
@@ -50,11 +52,13 @@ def parse_seeds(seed_str: str) -> list[int]:
     return [int(s) for s in seed_str.split()]
 
 
-def make_backend(model: str, provider: str):
+def make_backend(model: str, provider: str, reasoning_effort: str = None):
     if provider == "openai":
-        return OpenAIBackend(model=model)
+        return OpenAIBackend(model=model, reasoning_effort=reasoning_effort)
     elif provider == "anthropic":
         return AnthropicBackend(model=model)
+    elif provider == "google":
+        return GeminiBackend(model=model)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -62,7 +66,8 @@ def make_backend(model: str, provider: str):
 # ── Single run ───────────────────────────────────────────────────────────────
 
 def run_single(model: str, provider: str, difficulty: str, seed: int,
-               output_dir: str, baseline: bool = False) -> dict:
+               output_dir: str, baseline: bool = False,
+               reasoning_effort: str = None) -> dict:
     """Execute one benchmark run and save all outputs. Returns summary dict."""
 
     config = DIFFICULTY_CONFIG[difficulty]
@@ -70,7 +75,7 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
     max_turns = 2 * max_queries
 
     session = ProbeSession.from_difficulty(difficulty, seed, max_queries)
-    backend = make_backend(model, provider)
+    backend = make_backend(model, provider, reasoning_effort=reasoning_effort)
 
     run_log = {
         "config": {
@@ -84,6 +89,7 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
             "max_turns": max_turns,
             "budget_source": "auto",
             "prompt_condition": "baseline" if baseline else "standard",
+            "reasoning_effort": reasoning_effort,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         },
         "turns": [],
@@ -159,6 +165,47 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
             else None
         )
 
+    # Compute metacognitive metrics
+    if "messages" in result:
+        try:
+            meta = compute_metacognitive_metrics(session, result["messages"])
+            run_log["metacognitive"] = {
+                "confidence_reports": meta["confidence_reports"],
+                "sigma_curves": [
+                    {k: float(v) if isinstance(v, (float, np.floating)) else v
+                     for k, v in entry.items()}
+                    for entry in meta["sigma_curves"]
+                ],
+                "monitoring": [
+                    {k: (float(v) if isinstance(v, (float, np.floating)) else
+                         ([float(x) for x in v] if isinstance(v, list) else v))
+                     for k, v in entry.items()}
+                    for entry in meta["monitoring"]
+                ],
+                "control": [
+                    {k: float(v) if isinstance(v, (float, np.floating)) else v
+                     for k, v in entry.items()}
+                    for entry in meta["control"]
+                ],
+            }
+            if meta["monitoring"]:
+                run_log["behavioral_metrics"]["mean_monitoring_accuracy"] = float(
+                    np.mean([m["M_k"] for m in meta["monitoring"]])
+                )
+            if meta["control"]:
+                run_log["behavioral_metrics"]["mean_control_efficiency"] = float(
+                    np.mean([c["C_k"] for c in meta["control"]])
+                )
+            if meta["confidence_reports"]:
+                run_log["behavioral_metrics"]["n_confidence_reports"] = len(
+                    meta["confidence_reports"]
+                )
+        except Exception as e:
+            print(f"Metacognitive metrics computation failed: {e}")
+
+    extended = compute_extended_metrics(run_log, session=session)
+    run_log["behavioral_metrics"].update(extended)
+
     # ── Save files ──
     model_slug = model.replace("/", "_").replace(".", "_")
     stem = f"run_{difficulty}_s{seed}_{model_slug}_{time.strftime('%Y%m%d_%H%M%S')}"
@@ -198,6 +245,7 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
         "provider": provider,
         "difficulty": difficulty,
         "seed": seed,
+        "reasoning_effort": reasoning_effort,
         "queries_used": result["queries_used"],
         "max_queries": max_queries,
         "turns": result["turns"],
@@ -229,11 +277,11 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
 def print_summary_table(results: list[dict]):
     """Print a formatted comparison table grouped by difficulty."""
 
-    print(f"\n{'=' * 120}")
-    print(f"{'Model':>16} {'Diff':>8} {'Seed':>5} {'Coeff Err':>10} {'Best Solve':>11} "
+    print(f"\n{'=' * 126}")
+    print(f"{'Model':>16} {'RE':>6} {'Diff':>8} {'Seed':>5} {'Coeff Err':>10} {'Best Solve':>11} "
           f"{'a':>8} {'b':>8} {'c':>8} {'f':>8} "
           f"{'Q used':>7} {'Solves':>7} {'AUC':>8}")
-    print(f"{'-' * 120}")
+    print(f"{'-' * 126}")
 
     for diff in ["easy", "medium", "hard", "extreme"]:
         group = [r for r in results if r["difficulty"] == diff]
@@ -249,22 +297,23 @@ def print_summary_table(results: list[dict]):
             q = r.get("queries_used") or 0
             sc = r.get("solve_count") or 0
             auc = r.get("auc") or float("inf")
+            re = r.get("reasoning_effort") or "—"
             model_short = r["model"]
             if len(model_short) > 16:
                 model_short = model_short[:16]
             if ce == float("inf") and q == 0:
-                print(f"{model_short:>16} {diff:>8} {r['seed']:>5}   {'NO SCORE':>10}")
+                print(f"{model_short:>16} {re:>6} {diff:>8} {r['seed']:>5}   {'NO SCORE':>10}")
             else:
-                print(f"{model_short:>16} {diff:>8} {r['seed']:>5} {ce:>10.4f} {bse:>11.4f} "
+                print(f"{model_short:>16} {re:>6} {diff:>8} {r['seed']:>5} {ce:>10.4f} {bse:>11.4f} "
                       f"{ae:>8.4f} {be:>8.4f} {cce:>8.4f} {fe:>8.4f} "
                       f"{q:>7} {sc:>7} {auc:>8.4f}")
         print()
 
     # Per-model aggregates
     models = sorted(set(r["model"] for r in results))
-    print(f"{'=' * 120}")
+    print(f"{'=' * 126}")
     print("AGGREGATES (median total coefficient error)")
-    print(f"{'=' * 120}")
+    print(f"{'=' * 126}")
     for diff in ["easy", "medium", "hard", "extreme"]:
         group = [r for r in results if r["difficulty"] == diff
                  and r.get("total_coeff_error") is not None]
@@ -296,20 +345,26 @@ def main():
                         help="Output directory (default: runs/)")
     parser.add_argument("--baseline", action="store_true",
                         help="Use baseline prompt (no mathematical context)")
+    parser.add_argument("--reasoning-effort", type=str, default=None,
+                        choices=["none", "low", "medium", "high", "xhigh"],
+                        help="Override reasoning effort for all OpenAI models")
     args = parser.parse_args()
 
     seeds = parse_seeds(args.seeds)
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Resolve providers
+    # Resolve providers and reasoning effort per model
     model_configs = {}
     for m in args.models:
         if m in MODELS:
-            model_configs[m] = MODELS[m]["provider"]
+            model_configs[m] = {
+                "provider": MODELS[m]["provider"],
+                "reasoning_effort": args.reasoning_effort or MODELS[m].get("reasoning_effort"),
+            }
         elif "claude" in m or "anthropic" in m.lower():
-            model_configs[m] = "anthropic"
+            model_configs[m] = {"provider": "anthropic", "reasoning_effort": None}
         else:
-            model_configs[m] = "openai"
+            model_configs[m] = {"provider": "openai", "reasoning_effort": args.reasoning_effort}
 
     total_runs = len(args.models) * len(args.difficulties) * len(seeds)
 
@@ -322,6 +377,8 @@ def main():
     print(f"Total runs:   {total_runs}")
     print(f"Output:       {args.output_dir}/")
     print(f"Prompt:       {'baseline' if args.baseline else 'standard'}")
+    if args.reasoning_effort:
+        print(f"Reasoning:    {args.reasoning_effort} (override)")
     print()
 
     results = []
@@ -329,7 +386,9 @@ def main():
 
     for difficulty in args.difficulties:
         for model in args.models:
-            provider = model_configs[model]
+            mcfg = model_configs[model]
+            provider = mcfg["provider"]
+            reasoning_effort = mcfg["reasoning_effort"]
             for seed in seeds:
                 run_num += 1
                 tag = f"[{run_num}/{total_runs}] {model} / {difficulty} / s{seed}"
@@ -343,6 +402,7 @@ def main():
                         seed=seed,
                         output_dir=args.output_dir,
                         baseline=args.baseline,
+                        reasoning_effort=reasoning_effort,
                     )
                     results.append(summary)
                     elapsed = time.time() - t0
@@ -355,6 +415,7 @@ def main():
                     results.append({
                         "model": model, "provider": provider,
                         "difficulty": difficulty, "seed": seed,
+                        "reasoning_effort": reasoning_effort,
                         "error": str(e),
                     })
 

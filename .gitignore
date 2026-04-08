@@ -219,3 +219,6 @@ __marimo__/
 *.out
 *.toc
 *.synctex.gz
+
+# run folder
+runs/

@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 import argparse
 import json
+import math
 import os
 import time
 from datetime import datetime
@@ -124,7 +125,7 @@ Available commands:
                                                        current fit. Costs 1 query. Also adds this test function
                                                        to your data for future COMPUTE: solve.
                                                        (requires solve first)
-    COMPUTE: term_integral <type> <expression>       → returns one weight integral (free)
+    COMPUTE: term_integrals <expression>             → returns all three weight integrals (free)
         diffusion: ∫ u'(x)·φ'(x) dx
         advection: ∫ u'(x)·φ(x) dx
         reaction:  ∫ u(x)·φ(x) dx
@@ -191,12 +192,11 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
         self.history.append(record)
         return {"status": "ok", **{k: v for k, v in record.items() if not k.startswith("_")}}
 
-    def term_integral(self, term_type: str, spec: str) -> dict:
+    def term_integrals(self, spec: str) -> dict:
         """
-        Compute the weight integral for a specific PDE term.
+        Compute all three weight integrals for a candidate test function.
         Free — no budget cost.
 
-        term_type: 'diffusion', 'advection', or 'reaction'
         spec: test function expression string
         """
         tf, error = make_test_function_from_string(spec, domain=self.pde.domain)
@@ -215,24 +215,13 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
 
         I = lambda y: _composite_simpson(y, dx)
 
-        if term_type == "diffusion":
-            value = I(u_x_q * dphi_q)
-        elif term_type == "advection":
-            value = I(u_x_q * phi_q)
-        elif term_type == "reaction":
-            value = I(u_q * phi_q)
-        else:
-            return {
-                "status": "error",
-                "message": f"Unknown term type '{term_type}'. Use: diffusion, advection, reaction.",
-            }
-
         return {
             "status": "ok",
-            "type": "term_integral",
-            "term": term_type,
+            "type": "term_integrals",
             "spec": spec,
-            "value": round(value, 12),
+            "diffusion": round(I(u_x_q * dphi_q), 12),
+            "advection": round(I(u_x_q * phi_q), 12),
+            "reaction":  round(I(u_q * phi_q), 12),
         }
 
     def solve(self) -> dict:
@@ -536,11 +525,13 @@ def format_check_result(response: dict) -> str:
     )
 
 
-def format_term_integral(response: dict) -> str:
+def format_term_integrals(response: dict) -> str:
     if response["status"] == "ok":
         return (
-            f"Term integral ({response['term']}) for '{response['spec']}': "
-            f"{response['value']:+.12f}"
+            f"Term integrals for '{response['spec']}':\n"
+            f"  diffusion \u222bu'\u03c6' dx = {response['diffusion']:+.12f}\n"
+            f"  advection \u222bu'\u03c6  dx = {response['advection']:+.12f}\n"
+            f"  reaction  \u222bu\u03c6   dx = {response['reaction']:+.12f}"
         )
     return f"Error: {response['message']}"
 
@@ -602,7 +593,8 @@ class AnthropicBackend:
 class OpenAIBackend:
     """Calls the OpenAI API."""
 
-    def __init__(self, model: str = "gpt-4o", max_tokens: int = 4096):
+    def __init__(self, model: str = "gpt-4o", max_tokens: int = 4096,
+                 reasoning_effort: str = None):
         try:
             import openai
         except ImportError:
@@ -613,17 +605,21 @@ class OpenAIBackend:
         self.client = openai.OpenAI()
         self.model = model
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
 
     def chat(self, system: str, messages: list[dict]) -> str:
         import openai as _openai
         openai_messages = [{"role": "system", "content": system}] + messages
         for attempt in range(8):
             try:
-                response = self.client.chat.completions.create(
+                kwargs = dict(
                     model=self.model,
                     max_completion_tokens=self.max_tokens,
                     messages=openai_messages,
                 )
+                if self.reasoning_effort is not None:
+                    kwargs["reasoning_effort"] = self.reasoning_effort
+                response = self.client.chat.completions.create(**kwargs)
                 return response.choices[0].message.content
             except _openai.RateLimitError:
                 if attempt == 7:
@@ -631,6 +627,58 @@ class OpenAIBackend:
                 wait = min(2 ** attempt * 5, 120)
                 print(f"\n  [rate limit, retry {attempt+1}/7 in {wait}s]", end=" ", flush=True)
                 time.sleep(wait)
+
+
+class GeminiBackend:
+    """Calls the Google Gemini API."""
+
+    def __init__(self, model: str = "gemini-3-flash-preview", max_tokens: int = 4096):
+        try:
+            from google import genai
+        except ImportError:
+            raise ImportError(
+                "Install the google-genai SDK: pip install google-genai\n"
+                "And set GOOGLE_API_KEY environment variable."
+            )
+        self.client = genai.Client()
+        self.model = model
+        self.max_tokens = max_tokens
+
+    def chat(self, system: str, messages: list[dict]) -> str:
+        from google import genai  # noqa: F401
+        from google.genai import types
+
+        contents = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            contents.append(types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=msg["content"])]
+            ))
+
+        for attempt in range(8):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system,
+                        max_output_tokens=self.max_tokens,
+                    ),
+                )
+                return response.text
+            except Exception as e:
+                err_str = str(e)
+                if "credits are depleted" in err_str or "billing" in err_str.lower():
+                    raise RuntimeError(f"Google billing issue (not retryable): {e}")
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "500" in err_str or "INTERNAL" in err_str:
+                    if attempt == 7:
+                        raise
+                    wait = min(2 ** attempt * 5, 120)
+                    print(f"\n  [rate limit, retry {attempt+1}/7 in {wait}s]", end=" ", flush=True)
+                    time.sleep(wait)
+                else:
+                    raise
 
 
 class MockBackend:
@@ -695,10 +743,10 @@ def compute_efficiency_curve(session: ProbeSession) -> dict:
             A_lhs = np.hstack([G_diff, G_adv, G_react])
             theta, _, _, _ = np.linalg.lstsq(A_lhs, rhs, rcond=None)
 
-            a_err = float(np.mean(np.abs(theta[:n_b]      - pde.a.coeffs)))
-            b_err = float(np.mean(np.abs(theta[n_b:2*n_b] - pde.b.coeffs)))
-            c_err = float(np.mean(np.abs(theta[2*n_b:]    - pde.c.coeffs)))
-            f_err = float(np.mean(np.abs(f_rec             - pde.f.coeffs)))
+            a_err = float(np.max(np.abs(theta[:n_b]      - pde.a.coeffs)))
+            b_err = float(np.max(np.abs(theta[n_b:2*n_b] - pde.b.coeffs)))
+            c_err = float(np.max(np.abs(theta[2*n_b:]    - pde.c.coeffs)))
+            f_err = float(np.max(np.abs(f_rec             - pde.f.coeffs)))
 
             a_errors.append(a_err)
             b_errors.append(b_err)
@@ -748,6 +796,197 @@ Rules:
 """
 
 
+def dispatch_turn(session: ProbeSession, llm_text: str, actions: list[dict],
+                  prev_solve_coeffs: dict, run_log: Optional[dict],
+                  turn: int, max_turns: int, min_queries: int = None,
+                  verbose: bool = True) -> tuple:
+    """
+    Execute parsed actions and return the response to send back to the LLM.
+
+    Returns:
+        (response_text, is_done, updated_prev_solve_coeffs, explicit_prediction)
+    """
+    result_parts = []
+    query_executed = False
+    done = False
+    explicit_prediction = None
+
+    # Pass 1: free COMPUTE actions
+    for act in actions:
+        if act["action"] == "compute":
+            cmd = act["command"]
+            if cmd.startswith("eval_solution"):
+                cmd_args = cmd[len("eval_solution"):].strip()
+                resp = session.eval_solution(cmd_args)
+                result_text = format_eval_solution(resp)
+            elif cmd == "solve":
+                if min_queries and session.queries_used < min_queries:
+                    resp = {"status": "error",
+                            "message": f"Need at least {min_queries} queries before solving "
+                                       f"({session.queries_used} collected so far)."}
+                    prev = None
+                else:
+                    prev = prev_solve_coeffs.copy() if prev_solve_coeffs else None
+                    resp = session.solve()
+                result_text = format_solve_result(resp, prev_coeffs=prev)
+                if resp.get("status") == "ok":
+                    prev_solve_coeffs.update({
+                        "a": resp["a_coeffs"], "b": resp["b_coeffs"],
+                        "c": resp["c_coeffs"], "f": resp["f_coeffs"],
+                    })
+                    result_text += (
+                        "\n\n  How confident are you (0-100%) that each coefficient "
+                        "vector is within 0.1 of the true value? Reply with:\n"
+                        "  Confidence: a=XX%, b=XX%, c=XX%, f=XX%\n"
+                        "  Then one sentence on your main source of uncertainty."
+                    )
+                if run_log is not None and resp.get("status") == "ok":
+                    pde = session.pde
+                    a_err = float(np.max(np.abs(np.array(resp["a_coeffs"]) - pde.a.coeffs)))
+                    b_err = float(np.max(np.abs(np.array(resp["b_coeffs"]) - pde.b.coeffs)))
+                    c_err = float(np.max(np.abs(np.array(resp["c_coeffs"]) - pde.c.coeffs)))
+                    f_err = float(np.max(np.abs(np.array(resp["f_coeffs"]) - pde.f.coeffs)))
+                    solve_entry = {
+                        "solve_number": len(run_log["solves"]) + 1,
+                        "turn": turn,
+                        "queries_at_solve": session.queries_used,
+                        "n_equations": resp["n_rows"],
+                        "n_unknowns": resp["n_unknowns"],
+                        "coefficients": {
+                            "a": resp["a_coeffs"], "b": resp["b_coeffs"],
+                            "c": resp["c_coeffs"], "f": resp["f_coeffs"],
+                        },
+                        "coeff_errors": {"a": a_err, "b": b_err, "c": c_err, "f": f_err,
+                                         "total": a_err + b_err + c_err + f_err},
+                        "test_function_taxonomy": resp.get("type_counts", {}),
+                        "timestamp": time.time(),
+                    }
+                    run_log["solves"].append(solve_entry)
+                    run_log["error_curves"].append({
+                        "query_count": session.queries_used,
+                        "a_error": a_err, "b_error": b_err,
+                        "c_error": c_err, "f_error": f_err,
+                        "total_error": a_err + b_err + c_err + f_err,
+                    })
+            elif cmd.startswith("check") or cmd.startswith("verify"):
+                keyword = "check" if cmd.startswith("check") else "verify"
+                cmd_args = cmd[len(keyword):].strip()
+                if not cmd_args:
+                    result_text = "Usage: COMPUTE: check <expression>"
+                    resp = None
+                else:
+                    resp = session.verify(cmd_args)
+                    result_text = format_check_result(resp)
+                    if resp.get("status") == "ok" and resp.get("discrepancy", 1) < 1e-10:
+                        n_eqs = len([r for r in session.history if "_G_diff" in r]) - 1
+                        n_unk = 4 * session.basis.n_basis
+                        if n_eqs <= n_unk:
+                            result_text += (
+                                f"\n  ⚠ Note: with {n_eqs} equations for {n_unk} unknowns, "
+                                f"the system was exactly determined or underdetermined at last solve. "
+                                f"Zero discrepancy is expected and does NOT confirm correctness — "
+                                f"any solution to the linear system will satisfy test functions "
+                                f"in the span of your queries."
+                            )
+                if run_log is not None and resp is not None and resp.get("status") == "ok":
+                    run_log["verifications"].append({
+                        "turn": turn,
+                        "query_number": resp["query_number"],
+                        "test_function": resp["spec"],
+                        "predicted_lhs": float(resp["predicted_lhs"]),
+                        "actual_rhs": float(resp["actual_f_phi"]),
+                        "discrepancy": float(resp["discrepancy"]),
+                        "timestamp": time.time(),
+                    })
+            elif cmd.startswith("term_integrals"):
+                expr = cmd[len("term_integrals"):].strip()
+                if not expr:
+                    result_text = "Usage: COMPUTE: term_integrals <expression>"
+                    resp = None
+                else:
+                    resp = session.term_integrals(expr)
+                    result_text = format_term_integrals(resp)
+                if run_log is not None and resp is not None and resp.get("status") == "ok":
+                    run_log["term_integrals"].append({
+                        "turn": turn,
+                        "test_function": resp["spec"],
+                        "diffusion": float(resp["diffusion"]),
+                        "advection": float(resp["advection"]),
+                        "reaction": float(resp["reaction"]),
+                        "timestamp": time.time(),
+                    })
+            else:
+                result_text = f"Unknown command: '{cmd}'. Available: eval_solution, solve, check, term_integrals"
+            result_parts.append(result_text)
+            if verbose:
+                print(f"  → {result_text}\n")
+
+    # Pass 2: QUERY and PREDICT
+    for act in actions:
+        if act["action"] == "compute":
+            continue
+        elif act["action"] == "query":
+            if not query_executed:
+                resp = session.query(act["spec"])
+                result_text = format_query_result(resp)
+                result_parts.append(result_text)
+                query_executed = True
+                if run_log is not None and resp.get("status") == "ok":
+                    run_log["queries"].append({
+                        "query_number": resp["query_number"],
+                        "turn": turn,
+                        "test_function": resp["spec"],
+                        "rhs_value": float(resp["integral_f_phi"]),
+                        "timestamp": time.time(),
+                    })
+                if verbose:
+                    print(f"  → {result_text}\n")
+            else:
+                result_parts.append("One QUERY per turn. Review the result above, then submit your next action.")
+        elif act["action"] == "predict":
+            if query_executed:
+                result_parts.append("You may not PREDICT in the same response as a QUERY. Submit PREDICT alone.")
+            elif min_queries and session.queries_used < min_queries:
+                result_parts.append(
+                    f"You have only used {session.queries_used} queries. "
+                    f"Submit at least {min_queries} queries before predicting."
+                )
+            elif session.last_solve_coeffs is None:
+                result_parts.append("No COMPUTE: solve has been run yet. Call COMPUTE: solve before PREDICT.")
+            else:
+                prediction = session.last_solve_coeffs
+                result = session.submit_prediction(prediction)
+                if result["status"] == "scored":
+                    score_text = format_score_result(result)
+                    result_parts.append(score_text)
+                    done = True
+                    explicit_prediction = prediction
+                    if verbose:
+                        print(f"\n{score_text}\n")
+                else:
+                    result_parts.append(f"Error: {result['message']}")
+
+    if not any(a["action"] in ("query", "compute", "predict") for a in actions):
+        result_parts.append(
+            "No recognized action found. Use QUERY: <expression>, "
+            "COMPUTE: eval_solution <x1> ..., COMPUTE: solve, "
+            "COMPUTE: term_integrals <expr>, or PREDICT:."
+        )
+
+    if not done:
+        result_parts.append(f"[Turn {turn}/{max_turns}, {session.queries_used} queries used]")
+
+    response_text = "\n\n".join(result_parts)
+
+    if session.queries_used >= session.max_queries and not session.prediction_submitted:
+        response_text += (
+            f"\n\nBudget exhausted ({session.max_queries} queries). "
+            f"Call COMPUTE: solve if you haven't, then submit PREDICT: to end the session."
+        )
+
+    return response_text, done, prev_solve_coeffs, explicit_prediction
+
+
 def run_probe_session(session: ProbeSession, backend, verbose: bool = True,
                       max_turns: int = 100, baseline: bool = False,
                       min_queries: int = None, run_log: Optional[dict] = None) -> dict:
@@ -763,7 +1002,7 @@ Then give one sentence explaining the main source of your uncertainty.
         full_system += (
             f"\nYou must submit at least {min_queries} queries before calling COMPUTE: solve or PREDICT. "
             f"You have {max_turns} turns total. Each QUERY or COMPUTE uses one turn, so plan efficiently — "
-            f"you do not need to call term_integral for every query.\n"
+            f"you do not need to call term_integrals for every query.\n"
         )
     if baseline:
         initial_message = (
@@ -793,8 +1032,11 @@ Then give one sentence explaining the main source of your uncertainty.
         print("=" * 70)
         model_name = getattr(backend, "model", "unknown")
         condition = "baseline" if baseline else "standard"
+        reasoning = getattr(backend, "reasoning_effort", None)
         print(f"Model:      {model_name}")
         print(f"Prompt:     {condition}")
+        if reasoning is not None:
+            print(f"Reasoning:  {reasoning}")
         print(f"Difficulty: {session.difficulty}, n_basis: {session.basis.n_basis}, "
               f"seed: {session.seed}, budget: {session.max_queries}, turns: {max_turns}")
         print()
@@ -811,190 +1053,23 @@ Then give one sentence explaining the main source of your uncertainty.
 
         messages.append({"role": "assistant", "content": llm_text})
         actions = parse_probe_response(llm_text)
-        result_parts = []
-        query_executed = False
 
         if run_log is not None:
             run_log["turns"].append({
-                "turn": turn,
-                "timestamp": time.time(),
-                "role": "assistant",
-                "content": llm_text,
+                "turn": turn, "timestamp": time.time(),
+                "role": "assistant", "content": llm_text,
                 "parsed_actions": [a["action"] for a in actions],
             })
 
-        # Pass 1: free COMPUTE actions
-        for act in actions:
-            if act["action"] == "compute":
-                cmd = act["command"]
-                if cmd.startswith("eval_solution"):
-                    cmd_args = cmd[len("eval_solution"):].strip()
-                    resp = session.eval_solution(cmd_args)
-                    result_text = format_eval_solution(resp)
-                elif cmd == "solve":
-                    if min_queries and session.queries_used < min_queries:
-                        resp = {"status": "error",
-                                "message": f"Need at least {min_queries} queries before solving "
-                                           f"({session.queries_used} collected so far)."}
-                        prev = None
-                    else:
-                        prev = _prev_solve_coeffs.copy() if _prev_solve_coeffs else None
-                        resp = session.solve()
-                    result_text = format_solve_result(resp, prev_coeffs=prev)
-                    if resp.get("status") == "ok":
-                        _prev_solve_coeffs.update({
-                            "a": resp["a_coeffs"], "b": resp["b_coeffs"],
-                            "c": resp["c_coeffs"], "f": resp["f_coeffs"],
-                        })
-                    if run_log is not None and resp.get("status") == "ok":
-                        pde = session.pde
-                        a_err = float(np.mean(np.abs(np.array(resp["a_coeffs"]) - pde.a.coeffs)))
-                        b_err = float(np.mean(np.abs(np.array(resp["b_coeffs"]) - pde.b.coeffs)))
-                        c_err = float(np.mean(np.abs(np.array(resp["c_coeffs"]) - pde.c.coeffs)))
-                        f_err = float(np.mean(np.abs(np.array(resp["f_coeffs"]) - pde.f.coeffs)))
-                        solve_entry = {
-                            "solve_number": len(run_log["solves"]) + 1,
-                            "turn": turn,
-                            "queries_at_solve": session.queries_used,
-                            "n_equations": resp["n_rows"],
-                            "n_unknowns": resp["n_unknowns"],
-                            "coefficients": {
-                                "a": resp["a_coeffs"],
-                                "b": resp["b_coeffs"],
-                                "c": resp["c_coeffs"],
-                                "f": resp["f_coeffs"],
-                            },
-                            "coeff_errors": {"a": a_err, "b": b_err, "c": c_err, "f": f_err,
-                                             "total": a_err + b_err + c_err + f_err},
-                            "test_function_taxonomy": resp.get("type_counts", {}),
-                            "timestamp": time.time(),
-                        }
-                        run_log["solves"].append(solve_entry)
-                        run_log["error_curves"].append({
-                            "query_count": session.queries_used,
-                            "a_error": a_err,
-                            "b_error": b_err,
-                            "c_error": c_err,
-                            "f_error": f_err,
-                            "total_error": a_err + b_err + c_err + f_err,
-                        })
-                elif cmd.startswith("check") or cmd.startswith("verify"):
-                    keyword = "check" if cmd.startswith("check") else "verify"
-                    cmd_args = cmd[len(keyword):].strip()
-                    if not cmd_args:
-                        result_text = "Usage: COMPUTE: check <expression>"
-                        resp = None
-                    else:
-                        resp = session.verify(cmd_args)
-                        result_text = format_check_result(resp)
-                        # Warn if system was exactly determined at last solve
-                        if resp.get("status") == "ok" and resp.get("discrepancy", 1) < 1e-10:
-                            n_eqs = len([r for r in session.history if "_G_diff" in r]) - 1  # minus this check
-                            n_unk = 4 * session.basis.n_basis
-                            if n_eqs <= n_unk:
-                                result_text += (
-                                    f"\n  ⚠ Note: with {n_eqs} equations for {n_unk} unknowns, "
-                                    f"the system was exactly determined or underdetermined at last solve. "
-                                    f"Zero discrepancy is expected and does NOT confirm correctness — "
-                                    f"any solution to the linear system will satisfy test functions "
-                                    f"in the span of your queries."
-                                )
-                    if run_log is not None and resp is not None and resp.get("status") == "ok":
-                        run_log["verifications"].append({
-                            "turn": turn,
-                            "query_number": resp["query_number"],
-                            "test_function": resp["spec"],
-                            "predicted_lhs": float(resp["predicted_lhs"]),
-                            "actual_rhs": float(resp["actual_f_phi"]),
-                            "discrepancy": float(resp["discrepancy"]),
-                            "timestamp": time.time(),
-                        })
-                elif cmd.startswith("term_integral"):
-                    parts = cmd[len("term_integral"):].strip().split(None, 1)
-                    if len(parts) < 2:
-                        result_text = "Usage: COMPUTE: term_integral <diffusion|advection|reaction> <expression>"
-                        resp = None
-                    else:
-                        resp = session.term_integral(parts[0].lower(), parts[1])
-                        result_text = format_term_integral(resp)
-                    if run_log is not None and resp is not None and resp.get("status") == "ok":
-                        run_log["term_integrals"].append({
-                            "turn": turn,
-                            "term": resp["term"],
-                            "test_function": resp["spec"],
-                            "value": float(resp["value"]),
-                            "timestamp": time.time(),
-                        })
-                else:
-                    result_text = f"Unknown command: '{cmd}'. Available: eval_solution, solve, check, term_integral"
-                result_parts.append(result_text)
-                if verbose:
-                    print(f"  → {result_text}\n")
+        response_text, done, _prev_solve_coeffs, explicit_prediction_new = dispatch_turn(
+            session, llm_text, actions, _prev_solve_coeffs, run_log,
+            turn, max_turns, min_queries, verbose,
+        )
+        if explicit_prediction_new is not None:
+            explicit_prediction = explicit_prediction_new
 
-        # Pass 2: one QUERY, then PREDICT (only if no query this turn)
-        for act in actions:
-            if act["action"] == "compute":
-                continue
-            elif act["action"] == "query":
-                if not query_executed:
-                    resp = session.query(act["spec"])
-                    result_text = format_query_result(resp)
-                    result_parts.append(result_text)
-                    query_executed = True
-                    if run_log is not None and resp.get("status") == "ok":
-                        run_log["queries"].append({
-                            "query_number": resp["query_number"],
-                            "turn": turn,
-                            "test_function": resp["spec"],
-                            "rhs_value": float(resp["integral_f_phi"]),
-                            "timestamp": time.time(),
-                        })
-                    if verbose:
-                        print(f"  → {result_text}\n")
-                else:
-                    msg = "One QUERY per turn. Review the result above, then submit your next action."
-                    result_parts.append(msg)
-            elif act["action"] == "predict":
-                if query_executed:
-                    msg = "You may not PREDICT in the same response as a QUERY. Submit PREDICT alone."
-                    result_parts.append(msg)
-                elif min_queries and session.queries_used < min_queries:
-                    msg = (f"You have only used {session.queries_used} queries. "
-                           f"Submit at least {min_queries} queries before predicting "
-                           f"to ensure the system is well-overdetermined.")
-                    result_parts.append(msg)
-                elif session.last_solve_coeffs is None:
-                    msg = "No COMPUTE: solve has been run yet. Call COMPUTE: solve before PREDICT."
-                    result_parts.append(msg)
-                else:
-                    prediction = session.last_solve_coeffs
-                    result = session.submit_prediction(prediction)
-                    if result["status"] == "scored":
-                        score_text = format_score_result(result)
-                        result_parts.append(score_text)
-                        done = True
-                        explicit_prediction = prediction
-                        if verbose:
-                            print(f"\n{score_text}\n")
-                    else:
-                        result_parts.append(f"Error: {result['message']}")
-
-        if not any(a["action"] in ("query", "compute", "predict") for a in actions):
-            result_parts.append(
-                "No recognized action found. Use QUERY: <expression>, "
-                "COMPUTE: eval_solution <x1> ..., COMPUTE: solve, "
-                "COMPUTE: term_integral <type> <expr>, or PREDICT:."
-            )
-
-        if result_parts and not done:
-            result_parts.append(f"[Turn {turn}/{max_turns}, {session.queries_used} queries used]")
-            messages.append({"role": "user", "content": "\n\n".join(result_parts)})
-
-        if session.queries_used >= session.max_queries and not session.prediction_submitted:
-            messages.append({
-                "role": "user",
-                "content": f"Budget exhausted ({session.max_queries} queries). Call COMPUTE: solve if you haven't, then submit PREDICT: to end the session."
-            })
+        if not done:
+            messages.append({"role": "user", "content": response_text})
 
     output = {
         "turns": turn,
@@ -1140,8 +1215,10 @@ def compute_metacognitive_metrics(session: ProbeSession,
         s = matching[0]
         true_uncertainty = [s["sigma_a"], s["sigma_b"], s["sigma_c"]]
         stated_uncertainty = [1 - report["a"], 1 - report["b"], 1 - report["c"]]
-        if len(set(true_uncertainty)) > 1:
+        if len(set(true_uncertainty)) > 1 and len(set(stated_uncertainty)) > 1:
             rho, _ = spearmanr(true_uncertainty, stated_uncertainty)
+        else:
+            rho = float('nan')
             monitoring.append({
                 "k": k, "M_k": rho,
                 "true": true_uncertainty,
@@ -1222,6 +1299,202 @@ def plot_auc_curves(efficiency_results: dict, save_path: Optional[str] = None):
     return fig
 
 
+# ---------------------------------------------------------------------------
+# Extended cognitive metrics (post-hoc, from run_log)
+# ---------------------------------------------------------------------------
+
+def compute_learning_rate(run_log):
+    solves = run_log["solves"]
+    if len(solves) < 2:
+        return None
+    qs = [s["queries_at_solve"] for s in solves]
+    errs = [s["coeff_errors"]["total"] for s in solves]
+    valid = [(q, e) for q, e in zip(qs, errs) if e > 0]
+    if len(valid) < 2:
+        return None
+    qs, errs = zip(*valid)
+    log_errs = [math.log10(e) for e in errs]
+    n = len(qs)
+    mean_q = sum(qs) / n
+    mean_e = sum(log_errs) / n
+    num = sum((q - mean_q) * (e - mean_e) for q, e in zip(qs, log_errs))
+    den = sum((q - mean_q) ** 2 for q in qs)
+    if den < 1e-12:
+        return None
+    return num / den  # negative = improving
+
+
+def compute_attention_metrics(run_log):
+    turns = run_log["turns"]
+    total = len(turns)
+    if total == 0:
+        return {}
+    wasted = 0
+    max_reasoning_streak = 0
+    current_streak = 0
+    for t in turns:
+        actions = set(t.get("parsed_actions", []))
+        productive = actions & {"query", "compute", "predict"}
+        if not productive:
+            wasted += 1
+            current_streak += 1
+            max_reasoning_streak = max(max_reasoning_streak, current_streak)
+        else:
+            current_streak = 0
+    return {
+        "wasted_turns": wasted,
+        "wasted_turn_fraction": wasted / total,
+        "max_unproductive_streak": max_reasoning_streak,
+    }
+
+
+def compute_goal_maintenance(run_log):
+    turns = run_log["turns"]
+    solves = run_log["solves"]
+    if not solves:
+        return {}
+    first_solve_turn = solves[0]["turn"]
+    last_solve_turn = solves[-1]["turn"]
+    last_turn = turns[-1]["turn"] if turns else 0
+    tail_length = last_turn - last_solve_turn
+    max_gap = 0
+    current_gap = 0
+    for t in turns:
+        if t["turn"] < first_solve_turn:
+            continue
+        actions = set(t.get("parsed_actions", []))
+        has_query = "query" in actions
+        has_solve = "compute" in actions and "COMPUTE: solve" in t.get("content", "")
+        if has_query or has_solve:
+            current_gap = 0
+        else:
+            current_gap += 1
+            max_gap = max(max_gap, current_gap)
+    return {
+        "tail_after_last_solve": tail_length,
+        "max_gap_without_progress": max_gap,
+    }
+
+
+def compute_working_memory(run_log):
+    queries = run_log["queries"]
+    test_fns = [q["test_function"].strip() for q in queries]
+    seen = set()
+    duplicates = 0
+    for tf in test_fns:
+        if tf in seen:
+            duplicates += 1
+        seen.add(tf)
+    return {
+        "duplicate_queries": duplicates,
+        "unique_test_functions": len(seen),
+        "total_queries": len(test_fns),
+    }
+
+
+def compute_query_diversity(run_log):
+    """
+    Compute family entropy H across test function categories
+    (polynomial, trigonometric, exponential, localized, other).
+    """
+    metrics = {}
+
+    taxonomy = None
+    if run_log["solves"]:
+        taxonomy = run_log["solves"][-1].get("test_function_taxonomy", {})
+
+    if not taxonomy:
+        taxonomy = {"polynomial": 0, "trigonometric": 0,
+                    "exponential": 0, "localized": 0, "other": 0}
+        for q in run_log["queries"]:
+            spec = q.get("test_function", "").lower()
+            if "sin" in spec or "cos" in spec:
+                taxonomy["trigonometric"] += 1
+            elif "exp(" in spec:
+                if "-" in spec or "**2" in spec:
+                    taxonomy["localized"] += 1
+                else:
+                    taxonomy["exponential"] += 1
+            else:
+                taxonomy["polynomial"] += 1
+
+    counts = [v for v in taxonomy.values() if v > 0]
+    total = sum(counts)
+
+    if total > 0:
+        probs = [c / total for c in counts]
+        H = -sum(p * math.log2(p) for p in probs if p > 0)
+        K = len(taxonomy)  # 5 possible families
+        H_max = math.log2(K) if K > 1 else 1.0
+        metrics["family_entropy"] = H
+        metrics["family_entropy_normalized"] = H / H_max
+        metrics["family_counts"] = taxonomy
+    else:
+        metrics["family_entropy"] = 0.0
+        metrics["family_entropy_normalized"] = 0.0
+
+    return metrics
+
+
+def compute_query_space_blocks(session):
+    """
+    Per-block SVD analysis of the weak-form query matrix.
+    Returns effective rank, log-volume, and condition number for each
+    of the three coefficient blocks (diffusion, advection, reaction).
+    """
+    rows = [r for r in session.history if "_G_diff" in r]
+    if not rows:
+        return {}
+
+    G_diff  = np.array([r["_G_diff"]  for r in rows])
+    G_adv   = np.array([r["_G_adv"]   for r in rows])
+    G_react = np.array([r["_G_react"] for r in rows])
+    n_basis = G_diff.shape[1]
+    eps = 1e-12
+
+    result = {}
+    for name, block in [("diffusion", G_diff), ("advection", G_adv), ("reaction", G_react)]:
+        _, s, _ = np.linalg.svd(block, full_matrices=False)
+        nonzero = s[s > eps]
+        eff_rank = int(np.sum(s > eps))
+        log_vol = float(np.sum(np.log(nonzero))) if eff_rank > 0 else None
+        cond = float(s[0] / nonzero[-1]) if eff_rank > 0 else None
+        result[name] = {
+            "effective_rank": eff_rank,
+            "max_rank": n_basis,
+            "log_volume": log_vol,
+            "condition": cond,
+            "singular_values": [float(v) for v in s],
+        }
+    return result
+
+
+def compute_extended_metrics(run_log, session=None):
+    metrics = {}
+
+    lr = compute_learning_rate(run_log)
+    if lr is not None:
+        metrics["learning_rate"] = lr
+
+    if len(run_log["solves"]) >= 2:
+        first_err = run_log["solves"][0]["coeff_errors"]["total"]
+        last_err = run_log["solves"][-1]["coeff_errors"]["total"]
+        if last_err > 0:
+            metrics["improvement_ratio"] = first_err / last_err
+
+    metrics.update(compute_attention_metrics(run_log))
+    metrics.update(compute_goal_maintenance(run_log))
+    metrics.update(compute_working_memory(run_log))
+    metrics.update(compute_query_diversity(run_log))
+
+    if session is not None:
+        blocks = compute_query_space_blocks(session)
+        if blocks:
+            metrics["query_space_blocks"] = blocks
+
+    return metrics
+
+
 def main():
     parser = argparse.ArgumentParser(description="Probe-only PDE identification benchmark")
     parser.add_argument("--mock", action="store_true")
@@ -1229,7 +1502,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-queries", type=int, default=None,
                         help="Override auto-scaled query budget (default: from DIFFICULTY_CONFIG)")
-    parser.add_argument("--provider", default="anthropic", choices=["anthropic", "openai"],
+    parser.add_argument("--provider", default="anthropic", choices=["anthropic", "openai", "google"],
                         help="Which LLM provider to use (default: anthropic)")
     parser.add_argument("--model", default=None,
                         help="Model name (default: claude-haiku-4-5-20251001 for anthropic, gpt-4o for openai)")
@@ -1240,6 +1513,10 @@ def main():
                         help="Save results plot to file (default: probe_<difficulty>_<seed>.png)")
     parser.add_argument("--baseline", action="store_true",
                         help="Use minimal prompt without mathematical context (for ablation)")
+    parser.add_argument("--reasoning-effort", type=str, default=None,
+                        choices=["none", "low", "medium", "high", "xhigh"],
+                        help="Reasoning effort for OpenAI GPT-5+ models "
+                             "(default: None, uses API default — 'none' for GPT-5.2+)")
     parser.add_argument("--min-queries", type=int, default=None,
                         help="Minimum queries before PREDICT is allowed")
     parser.add_argument("--output-dir", type=str, default=".",
@@ -1247,7 +1524,9 @@ def main():
     args = parser.parse_args()
 
     if args.model is None:
-        args.model = "gpt-4o" if args.provider == "openai" else "claude-haiku-4-5-20251001"
+        args.model = ("gpt-4o" if args.provider == "openai"
+                      else "gemini-3-flash-preview" if args.provider == "google"
+                      else "claude-haiku-4-5-20251001")
 
     config = DIFFICULTY_CONFIG[args.difficulty]
     max_queries = args.max_queries if args.max_queries is not None else config["budget"]
@@ -1259,7 +1538,9 @@ def main():
     if args.mock:
         backend = MockBackend()
     elif args.provider == "openai":
-        backend = OpenAIBackend(model=args.model)
+        backend = OpenAIBackend(model=args.model, reasoning_effort=args.reasoning_effort)
+    elif args.provider == "google":
+        backend = GeminiBackend(model=args.model)
     else:
         backend = AnthropicBackend(model=args.model)
 
@@ -1275,6 +1556,7 @@ def main():
             "max_turns": max_turns,
             "budget_source": "override" if args.max_queries is not None else "auto",
             "prompt_condition": "baseline" if args.baseline else "standard",
+            "reasoning_effort": args.reasoning_effort,
             "timestamp": datetime.now().isoformat(),
         },
         "turns": [],
@@ -1306,8 +1588,8 @@ def main():
         sc = result["score"]
         run_log["results"] = {
             "coefficient_errors": {
-                "a": sc.get("a_coeff_error"), "b": sc.get("b_coeff_error"),
-                "c": sc.get("c_coeff_error"), "f": sc.get("f_coeff_error"),
+                "a": sc.get("coeff_error_a"), "b": sc.get("coeff_error_b"),
+                "c": sc.get("coeff_error_c"), "f": sc.get("coeff_error_f"),
                 "total": sc.get("total_coeff_error"),
             },
             "pointwise_errors": {
@@ -1349,9 +1631,51 @@ def main():
             else None
         )
 
-    model_slug = args.model.replace("/", "_")
+    # Compute metacognitive metrics
+    if "messages" in result:
+        try:
+            meta = compute_metacognitive_metrics(session, result["messages"])
+            run_log["metacognitive"] = {
+                "confidence_reports": meta["confidence_reports"],
+                "sigma_curves": [
+                    {k: float(v) if isinstance(v, (float, np.floating)) else v
+                     for k, v in entry.items()}
+                    for entry in meta["sigma_curves"]
+                ],
+                "monitoring": [
+                    {k: (float(v) if isinstance(v, (float, np.floating)) else
+                         ([float(x) for x in v] if isinstance(v, list) else v))
+                     for k, v in entry.items()}
+                    for entry in meta["monitoring"]
+                ],
+                "control": [
+                    {k: float(v) if isinstance(v, (float, np.floating)) else v
+                     for k, v in entry.items()}
+                    for entry in meta["control"]
+                ],
+            }
+            if meta["monitoring"]:
+                run_log["behavioral_metrics"]["mean_monitoring_accuracy"] = float(
+                    np.mean([m["M_k"] for m in meta["monitoring"]])
+                )
+            if meta["control"]:
+                run_log["behavioral_metrics"]["mean_control_efficiency"] = float(
+                    np.mean([c["C_k"] for c in meta["control"]])
+                )
+            if meta["confidence_reports"]:
+                run_log["behavioral_metrics"]["n_confidence_reports"] = len(
+                    meta["confidence_reports"]
+                )
+        except Exception as e:
+            print(f"Metacognitive metrics computation failed: {e}")
+
+    extended = compute_extended_metrics(run_log, session=session)
+    run_log["behavioral_metrics"].update(extended)
+
+    model_slug = args.model.replace("/", "_").replace(".", "_")
+    re_tag = f"_re{args.reasoning_effort}" if args.reasoning_effort else ""
     run_stem = (
-        f"run_{args.difficulty}_s{args.seed}_{model_slug}"
+        f"run_{args.difficulty}_s{args.seed}_{model_slug}{re_tag}"
         f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     )
     log_path = os.path.join(args.output_dir, run_stem + ".json")
