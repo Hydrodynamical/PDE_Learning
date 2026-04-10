@@ -11,17 +11,21 @@ experimental strategy.
 
 ```bash
 # Install dependencies
-pip install numpy scipy matplotlib anthropic openai
+pip install numpy scipy matplotlib anthropic openai google-genai
 
-# Set your API key (Anthropic or OpenAI)
+# Set your API key
 export ANTHROPIC_API_KEY=your_key_here
 export OPENAI_API_KEY=your_key_here      # if using OpenAI models
+export GOOGLE_API_KEY=your_key_here      # if using Google models
 
 # Run with Anthropic (default)
 python main_loop.py --difficulty hard --seed 42
 
 # Run with OpenAI
 python main_loop.py --provider openai --model gpt-4o --difficulty hard --seed 42
+
+# Run with Google Gemini
+python main_loop.py --provider google --model gemini-3-flash-preview --difficulty hard --seed 42
 
 # Test with mock LLM (no API key needed)
 python main_loop.py --mock --difficulty easy
@@ -57,7 +61,7 @@ The number of basis functions (and thus unknowns) scales with difficulty.
 | `COMPUTE: eval_solution x1 x2 ...` | u(x) and u'(x) at given points | free |
 | `COMPUTE: term_integrals <expr>` | All three term weights at once: ∫u'φ' dx (diffusion), ∫u'φ dx (advection), ∫uφ dx (reaction) | free |
 | `COMPUTE: solve` | Least-squares coefficient recovery + delta from previous solve | free |
-| `COMPUTE: check <expression>` | Predicted LHS vs actual ∫fφ dx for a new test function | 1 query |
+| `COMPUTE: check <expression>` | Predicted LHS vs actual ∫fφ dx for a new test function | free |
 | `PREDICT:` | End session and submit last `COMPUTE: solve` coefficients as answer | — |
 
 `COMPUTE: solve` shows per-coefficient change from the previous solve, so the
@@ -66,6 +70,12 @@ model can tell when its estimates have converged.
 `COMPUTE: term_integrals` returns all three weights in a single call, making it
 easy to screen candidate test functions for reaction-term informativeness before
 spending a query.
+
+`COMPUTE: check` is a free consistency diagnostic. It compares the predicted
+LHS (from current â, b̂, ĉ estimates) against the actual ∫fφ dx for a new test
+function. Zero discrepancy does NOT confirm correctness — it only means this test
+function is consistent with the current fit. Unlike QUERY, check is read-only: it
+does not add the test function to the solver's equation system.
 
 ---
 
@@ -127,9 +137,10 @@ python main_loop.py [options]
 Core options:
   --difficulty {easy,medium,hard,extreme}   Problem difficulty (default: medium)
   --seed INT                                Random seed (default: 42)
-  --provider {anthropic,openai}             LLM provider (default: anthropic)
+  --provider {anthropic,openai,google}      LLM provider (default: anthropic)
   --model MODEL                             Model name (default: claude-haiku-4-5-20251001
-                                            for anthropic, gpt-4o for openai)
+                                            for anthropic, gpt-4o for openai,
+                                            gemini-3-flash-preview for google)
 
 Budget overrides (auto-scaled by default):
   --max-queries INT                         Query budget
@@ -175,7 +186,8 @@ polynomials, giving a well-conditioned overdetermined system.
 
 | File | Description |
 |---|---|
-| `main_loop.py` | **Primary entry point.** Probe-only benchmark with Anthropic/OpenAI support, auto-scaled budget, convergence delta tracking, and full JSON logging. |
+| `main_loop.py` | **Primary entry point.** Probe-only benchmark with Anthropic/OpenAI/Google support, auto-scaled budget, convergence delta tracking, and full JSON logging. |
+| `kaggle.py` | Kaggle Benchmarks notebook adapter. Uses `dispatch_turn()` from main_loop.py with kbench's `llm.prompt()` interface. |
 | `probe_loop.py` | Earlier version of main_loop.py (without convergence deltas). |
 | `llm_loop.py` | Legacy variant supporting DECOMPOSE commands and auto-progress feedback. Uses `interactive.py`. |
 
@@ -209,4 +221,5 @@ polynomials, giving a well-conditioned overdetermined system.
 - `numpy`, `scipy`, `matplotlib`
 - `anthropic` (for Anthropic models) — `pip install anthropic`
 - `openai` (for OpenAI models) — `pip install openai`
-- `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` environment variables
+- `google-genai` (for Google models) — `pip install google-genai`
+- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and/or `GOOGLE_API_KEY` environment variables

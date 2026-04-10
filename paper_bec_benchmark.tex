@@ -1,0 +1,261 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black}
+
+\title{Can Language Models Identify a Quantum System?\\[4pt]
+\large A Cognitive Benchmark for Scientific Reasoning\\via Perturbation Experiments on an Unknown Bose--Einstein Condensate}
+
+\author{Joseph K.\ Miller}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We propose a benchmark that measures scientific reasoning in large language models through the task of identifying an unknown Bose--Einstein condensate (BEC) from perturbation experiments. The model receives an absorption image of the condensate density, a budget of experimental shots that perturb the system and return the density response, and free diagnostic tools---but must design its own experimental strategy: choosing where and how hard to poke the condensate, interpreting the spatially resolved response, diagnosing when the linear response approximation breaks down, and iterating. The benchmark extends a previous framework for elliptic PDE identification to a physically grounded setting where the query budget reflects real experimental cost, the identifiability hierarchy depends on the quantum state, and a new failure mode---the nonlinearity trap---tests whether the model can reason about the validity limits of its own computational tools. The task produces a cognitive profile spanning nine faculties, including a new one: model validity reasoning.
+\end{abstract}
+
+\section{Introduction}
+
+In a companion paper, we presented a benchmark based on identifying an unknown elliptic PDE from weak-form integrals. That benchmark demonstrated that a single scientific task could engage multiple cognitive faculties---mathematical reasoning, metacognition, planning, flexibility, in-context learning, attention, and goal maintenance---with mathematically grounded evaluation at every step.
+
+Here we extend the framework to a physically motivated setting: identifying the unknown potential, kinetic coefficient, and interaction strength of a Bose--Einstein condensate from perturbation experiments. The shift from abstract weak-form queries to physical perturbation--response measurements changes the benchmark in three fundamental ways:
+
+\begin{enumerate}[leftmargin=2em]
+\item \textbf{Each observation returns a function, not a scalar.} A perturbation experiment yields the full spatially resolved density response $\delta n(x)$, providing far more information per shot than a single weak-form integral. The budget constraint now reflects experimental cost (BEC preparation, decoherence, imaging noise), not information deficiency.
+
+\item \textbf{The identifiability hierarchy is state-dependent.} In the elliptic PDE benchmark, the hierarchy $f \gg a > b > c$ is a fixed property of the weak form. In the BEC setting, the relative identifiability of the potential $V$, kinetic coefficient $A$, and interaction strength $\lambda$ depends on the condensate density profile---a model that reads and reasons about the absorption image will design better experiments.
+
+\item \textbf{A new failure mode with no classical analogue.} The solve tool uses linearized response theory. Strong perturbations break this approximation, producing confident but wrong coefficient estimates. The model must recognize when its own computational model has failed---a form of scientific reasoning the original benchmark could not access.
+\end{enumerate}
+
+\section{The Unknown BEC}
+
+\subsection{The Gross--Pitaevskii Equation}
+
+The ground state $\psi_0(x)$ of the condensate satisfies the time-independent Gross--Pitaevskii equation (GPE):
+\begin{equation}\label{eq:gpe}
+-\nabla \cdot \bigl(A(x)\,\nabla\psi_0\bigr) + V(x)\,\psi_0 + \lambda(x)\,|\psi_0|^2\,\psi_0 = \mu\,\psi_0,
+\end{equation}
+where $V(x)$ is the trapping potential, $A(x)$ is the (spatially varying) kinetic coefficient encoding effective mass variation, $\lambda(x)$ is the interaction strength, and $\mu$ is the chemical potential fixed by the normalization $\int|\psi_0|^2\,dx = N$.
+
+Each unknown coefficient is expanded in shifted Legendre polynomials on $[0,1]$:
+\[
+V(x) = \sum_{j=0}^{N-1} v_j\,P_j(x), \qquad
+A(x) = \sum_{j=0}^{N-1} a_j\,P_j(x), \qquad
+\lambda(x) = \sum_{j=0}^{N-1} \ell_j\,P_j(x),
+\]
+giving $3N$ unknowns total. The chemical potential $\mu$ is not independently identifiable: the weak form of \eqref{eq:gpe} only constrains $\tilde{V}(x) = V(x) - \mu$, so we fix the gauge by setting $\int V\,dx = 0$ and absorb $\mu$ into the constant term.
+
+\subsection{Difficulty Levels}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Difficulty & $N$ (basis) & Unknowns ($3N$) & Shots & Turn limit \\
+\midrule
+Easy     & 2 & 6  & 6  & 12 \\
+Medium   & 3 & 9  & 8  & 16 \\
+Hard     & 4 & 12 & 10 & 20 \\
+Extreme  & 8 & 24 & 15 & 30 \\
+\bottomrule
+\end{tabular}
+\caption{Difficulty scaling. Shots are fewer relative to unknowns than in the elliptic benchmark because each shot returns a full function ($M$ grid points), not a scalar. The turn limit is tight to penalize idle reasoning.}
+\label{tab:difficulty}
+\end{table}
+
+\section{The Experimental Loop}
+
+\subsection{What the Model Receives}
+
+An absorption image: the ground state density $n_0(x) = |\psi_0(x)|^2$ on a grid of $M$ points. This is the only free information. Everything else costs shots.
+
+\subsection{Tools}
+
+\paragraph{PERTURB $\boldsymbol{\delta V(x), \delta t}$.}
+The model specifies a perturbation potential $\delta V(x)$ (as a symbolic expression) and a duration $\delta t$. The system evolves the full time-dependent GPE with potential $V + \delta V$ for time $\delta t$, images the result, and returns the density change
+\[
+\delta n(x) = |\psi_{\mathrm{pert}}(x)|^2 - |\psi_0(x)|^2
+\]
+on the grid. \emph{Costs one shot.} Internally, the system stores the linearized response matrix rows relating $\delta n$ to the unknowns, for use by the solve tool. The model never sees these matrices.
+
+\paragraph{COMPUTE: solve.}
+Assembles the accumulated linear response data from all shots and fits $V$, $A$, $\lambda$ by regularized least squares. Returns recovered coefficient vectors. After the first call, returns the maximum per-coefficient change from the previous solve. Free and unlimited, but requires enough shots to constrain the unknowns.
+
+Since each shot returns $M$ grid values, one shot provides $M$ equations. In principle, a single shot could constrain all $3N$ unknowns if $M \gg 3N$. In practice, a single perturbation excites only a limited subspace of the parameter space, so multiple geometrically distinct perturbations are needed.
+
+\paragraph{COMPUTE: image.}
+Returns $n_0(x) = |\psi_0(x)|^2$ and optionally the phase profile $\arg(\psi_0(x))$ on the grid. Free. This is the unperturbed absorption image.
+
+\paragraph{COMPUTE: sensitivity.}
+The model proposes a candidate $\delta V(x)$ without committing a shot. The system returns the predicted density response decomposed by source: how much of $\delta n$ is attributable to $V$, to $A$, and to $\lambda$, using the current best estimates. Free and unlimited. This is the experimental design tool---the model screens perturbations before spending shots.
+
+This is the analogue of the \textsc{term\_integrals} tool in the elliptic benchmark, but richer: instead of three scalars (diffusion, advection, reaction weights), it returns three functions (or their norms), showing \emph{where} each unknown contributes to the response.
+
+\paragraph{COMPUTE: predict\_and\_shoot.}
+The model proposes $\delta V(x)$. The system returns both the predicted $\delta n$ (from current coefficient estimates via linear response) and the actual $\delta n$ (from full GPE simulation), along with the discrepancy $\|\delta n_{\mathrm{pred}} - \delta n_{\mathrm{actual}}\|$. \emph{Costs one shot.} This is the consistency check---and the primary diagnostic for detecting nonlinear breakdown.
+
+\paragraph{PREDICT.}
+Ends the session and submits the coefficients from the most recent solve.
+
+\section{The Identifiability Hierarchy}
+
+In the elliptic PDE benchmark, the hierarchy $f \gg a > b > c$ is a fixed structural property of the weak form: the source $f$ appears linearly on the right-hand side and is always perfectly recovered, while the reaction coefficient $c$ has negligible influence because $|u(x)|$ is small under Dirichlet boundary conditions.
+
+In the BEC setting, the hierarchy reshuffles and becomes \emph{state-dependent}:
+
+\paragraph{$V(x)$ is easiest.} Any perturbation that overlaps with $\psi_0$ constrains $V$ directly through the $V\psi_0\phi$ term in the weak form. The potential acts as a direct energy shift, and its response signature is large and spatially broad.
+
+\paragraph{$A(x)$ requires gradient structure.} The kinetic term $-\nabla\cdot(A\nabla\psi)$ only contributes where $\psi$ has curvature. A spatially uniform perturbation $\delta V = \mathrm{const}$ tells the model nothing about $A$---it must design perturbations that force the condensate to develop spatial gradients. This requires reasoning about the condensate's current shape.
+
+\paragraph{$\lambda(x)$ is hardest and creates a dilemma.} The nonlinear term $\lambda|\psi|^2\psi$ only matters where the condensate is dense. To constrain $\lambda$, the model must perturb near the density peak, where $|\psi_0|^2$ is large. But strong perturbations at the density peak are precisely where the linear response approximation is most likely to break down, because the $|\psi|^2$ factor amplifies the nonlinear correction. The model faces a fundamental tradeoff: increasing the perturbation amplitude to improve the signal-to-noise ratio for $\lambda$ versus maintaining the validity of the linearized solve tool.
+
+The general hierarchy is $V > A > \lambda$, but the relative difficulty depends on the condensate profile. A condensate with a sharp density peak (e.g., in a tight harmonic trap) makes $\lambda$ relatively easier---the nonlinear term has a large, localized signature. A flat, dilute condensate makes $\lambda$ nearly invisible. A model that reads the absorption image and connects the density structure to the identifiability landscape will design better experiments.
+
+\section{The Nonlinearity Trap}
+
+This is the central new feature of the benchmark, with no analogue in the elliptic PDE version.
+
+The solve tool uses linearized response theory: it assumes the density change $\delta n$ is a linear function of the perturbation $\delta V$. This is valid for weak perturbations, where the system remains near the ground state. For strong perturbations, the nonlinear term $\lambda|\psi|^2\psi$ means the actual response is not a scaled-up version of the weak response---the condensate redistributes, changing the effective potential felt by the atoms.
+
+When the model applies a perturbation that is too strong:
+\begin{enumerate}[leftmargin=2em]
+\item The PERTURB tool returns the \emph{true} (nonlinear) density response $\delta n$.
+\item The solve tool fits coefficients assuming $\delta n$ was generated by a \emph{linear} process.
+\item The resulting coefficient estimates are systematically biased---not just noisy, but \emph{wrong} in a structured way that the solve tool cannot diagnose internally.
+\item The model must detect this failure externally, via predict\_and\_shoot: if the predicted $\delta n$ (from the linear model with current estimates) disagrees with the actual $\delta n$, either the estimates are wrong or the linear approximation has broken down.
+\end{enumerate}
+
+The trap is that the model has two possible explanations for a large predict\_and\_shoot discrepancy: ``my coefficients are wrong and I need more data'' versus ``my data is corrupted by nonlinearity and I need to reduce perturbation amplitude.'' Distinguishing these requires scientific reasoning about the physics of the system, not just statistical pattern matching.
+
+\subsection{The Enhanced Prompt}
+
+The baseline and enhanced prompts are designed to test whether the model can reason about nonlinear breakdown:
+
+\medskip
+\noindent\textbf{Baseline prompt:} ``You have a Bose--Einstein condensate in an unknown trap. Identify $V(x)$, $A(x)$, and $\lambda(x)$. Here are your tools.''
+
+\medskip
+\noindent\textbf{Enhanced prompt:} Adds one mathematical fact:
+\begin{quote}
+\itshape The solve tool recovers coefficients using linearized response theory, which assumes $\delta n$ is a linear function of $\delta V$. This approximation breaks down when the perturbation amplitude is large enough to significantly redistribute the condensate density---the nonlinear term $\lambda|\psi|^2\psi$ means the response to a strong perturbation is not simply a scaled-up version of the response to a weak one.
+\end{quote}
+
+The enhanced prompt tells the model \emph{what} can go wrong (linear response breaks at large amplitude) without telling it \emph{what to do about it} (use sensitivity to pre-screen, use predict\_and\_shoot to detect breakdown, titrate perturbation strength, start weak and increase). The benchmark measures whether the model can derive strategy from this structural insight.
+
+\section{Cognitive Profile}
+
+The benchmark produces a cognitive profile across nine faculties---the eight from the elliptic PDE benchmark plus a new one.
+
+\subsection{Mathematical Reasoning: Coefficient Error}
+
+For each coefficient $j \in \{V, A, \lambda\}$:
+\[
+E_j = \frac{1}{N}\sum_{i=0}^{N-1}|\hat{\theta}_{j,i} - \theta^*_{j,i}|.
+\]
+Total error $E = E_V + E_A + E_\lambda$.
+
+\subsection{Metacognitive Monitoring}
+
+After each solve, the model reports per-coefficient confidence. The true epistemic state is computable from the Fisher information of the linearized response model. Monitoring accuracy is the Spearman rank correlation between stated and true uncertainty rankings.
+
+\subsection{Metacognitive Control}
+
+Does the model target its perturbations toward its most uncertain coefficient? Measured by the information gain of each shot relative to the optimal shot for the most uncertain coefficient.
+
+\subsection{Executive Planning}
+
+Solve count, budget utilization, and the ratio of predict\_and\_shoot (verification) to PERTURB (data collection) shots. High verification ratios indicate inhibitory control failure.
+
+\subsection{Cognitive Flexibility}
+
+Perturbation diversity: does the model vary the spatial structure, location, and amplitude of its perturbations? Measured by the entropy over perturbation types (localized, broad, gradient-inducing, amplitude-varying) and by the conditioning of the accumulated response matrix blocks.
+
+\subsection{In-Context Learning}
+
+Improvement ratio $R = E_1/E_n$ across successive solves. Learning rate: slope of $\log_{10}(E)$ regressed on shot count.
+
+\subsection{Attention}
+
+Does the model use the absorption image to inform perturbation design? A model that ignores density structure and perturbs uniformly wastes shots. Also: wasted turn fraction (turns with no recognized action).
+
+\subsection{Goal Maintenance}
+
+Turns between final solve and submission. Post-solve drift indicates loss of the submission objective.
+
+\subsection{Model Validity Reasoning (New)}
+
+This faculty has no analogue in the elliptic PDE benchmark. It measures whether the model can detect and respond to the breakdown of its own computational tool. Operationalized as:
+\begin{itemize}[leftmargin=2em]
+\item \textbf{Detection:} After a predict\_and\_shoot with large discrepancy following a strong perturbation, does the model diagnose nonlinear breakdown (vs.\ attributing the discrepancy to bad coefficients)?
+\item \textbf{Response:} Does the model reduce perturbation amplitude after detecting breakdown?
+\item \textbf{Prevention:} Does the model use the sensitivity tool to pre-screen perturbation amplitudes, or start with weak perturbations and titrate upward?
+\end{itemize}
+This maps onto a metacognitive capacity that existing benchmarks do not measure: awareness of the validity domain of one's own inferential tools.
+
+\section{Comparison to the Elliptic PDE Benchmark}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+& \textbf{Elliptic PDE} & \textbf{BEC} \\
+\midrule
+Unknowns & $a, b, c, f$ (4 functions) & $V, A, \lambda$ (3 functions) \\
+Query output & scalar $\int f\phi\,dx$ & function $\delta n(x)$ on grid \\
+Budget meaning & information constraint & experimental cost \\
+Identifiability & fixed: $f \gg a > b > c$ & state-dependent: $V > A > \lambda$ \\
+Key tool & term\_integrals (3 scalars) & sensitivity (3 functions) \\
+New failure mode & --- & nonlinearity trap \\
+Cognitive faculties & 8 & 9 (adds model validity reasoning) \\
+Physical grounding & abstract & BEC experiments \\
+\bottomrule
+\end{tabular}
+\caption{Structural comparison of the two benchmarks.}
+\end{table}
+
+\section{Discussion}
+
+\subsection{Why the BEC Setting}
+
+The BEC provides a natural physical context for every design choice. The shot budget reflects real experimental cost (preparing, perturbing, and imaging a condensate). The identifiability hierarchy arises from physics (the nonlinear term is density-dependent), not from arbitrary mathematical structure. The nonlinearity trap tests reasoning about model validity---a capacity that is central to experimental science but absent from existing AI benchmarks.
+
+\subsection{The Nonlinearity Trap as a Discriminator}
+
+In the elliptic PDE benchmark, the enhanced prompt provides a mathematical fact (unequal identifiability) and the benchmark tests whether the model can derive strategy from it. In the BEC benchmark, the enhanced prompt provides a physical fact (linear response breaks at large amplitude) and the benchmark tests whether the model can derive a more subtle strategy: managing the tradeoff between signal strength and model validity.
+
+This is a sharper discriminator because the failure is \emph{actively misleading}. In the elliptic case, ill-conditioning produces large error bars---the model can see that its estimates are uncertain. In the BEC case, the solve tool returns confident-looking estimates from corrupted data. The model must distrust its own tools, a higher-order cognitive capacity.
+
+\subsection{Limitations}
+
+The linearized response theory used by the solve tool is itself an approximation. For very strong interactions $\lambda$, even the ground state computation may require careful numerics. The benchmark assumes the GPE is an adequate model of the BEC, which breaks down at finite temperature or in strongly correlated regimes.
+
+The perturbation duration $\delta t$ introduces a new experimental design dimension not present in the elliptic benchmark. If $\delta t$ is too short, the response is negligible; if too long, the system may undergo complex dynamics beyond simple density redistribution. The benchmark must either fix $\delta t$ (simpler but less realistic) or let the model choose it (richer but harder to evaluate).
+
+\section{Conclusion}
+
+The BEC perturbation benchmark extends the cognitive evaluation framework from abstract mathematics to physically grounded experimental science. It preserves the core strengths of the elliptic PDE benchmark---mathematically computable ground truth, multi-faculty cognitive profiling, clean separation of models by capability---while adding a qualitatively new dimension: the ability to reason about when one's own inferential tools fail. The nonlinearity trap, in which strong perturbations produce confident but wrong estimates, tests a form of scientific metacognition that no existing benchmark measures.
+
+\begin{thebibliography}{9}
+\bibitem{burnell2026}
+R.~Burnell et al., ``Measuring progress toward AGI: A cognitive framework,'' Google DeepMind, March 2026.
+
+\bibitem{miller2026}
+J.~K.~Miller, ``Can language models learn a PDE? A cognitive benchmark for scientific reasoning via weak-form identification of an unknown elliptic equation,'' 2026.
+
+\bibitem{pitaevskii2003}
+L.~Pitaevskii and S.~Stringari, \textit{Bose--Einstein Condensation}, Oxford University Press, 2003.
+
+\bibitem{dalfovo1999}
+F.~Dalfovo, S.~Giorgini, L.~P.~Pitaevskii, and S.~Stringari, ``Theory of Bose--Einstein condensation in trapped gases,'' \textit{Rev.\ Mod.\ Phys.}, 71:463, 1999.
+\end{thebibliography}
+
+\end{document}

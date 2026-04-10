@@ -44,6 +44,30 @@ DIFFICULTY_CONFIG = {
 }
 
 # ---------------------------------------------------------------------------
+# Test function atom classifier
+# ---------------------------------------------------------------------------
+
+def count_atoms(spec: str) -> str:
+    """Classify a test function into exactly one family.
+    Pure atoms → their family. Products of different families → 'other'."""
+    s = spec.lower()
+    atoms = set()
+    if "sin" in s or "cos" in s:
+        atoms.add("trigonometric")
+    if "exp(-" in s and any(k in s for k in ["**2", "^2"]):
+        atoms.add("localized")
+    elif "exp(" in s:
+        atoms.add("exponential")
+    if not atoms:
+        atoms.add("polynomial")
+    elif any(p in s for p in ["x**", "x^", "x*(1-x)", "(1-x)"]) or re.match(r"x[\*\^]", s):
+        atoms.add("polynomial")
+    if len(atoms) > 1:
+        return "other"
+    return atoms.pop()
+
+
+# ---------------------------------------------------------------------------
 # Session
 # ---------------------------------------------------------------------------
 
@@ -122,8 +146,7 @@ Available commands:
                                                        current â,b̂,ĉ and compares to actual ∫f·φ dx for a NEW
                                                        test function. Zero discrepancy does NOT prove correctness —
                                                        it only means this test function is consistent with your
-                                                       current fit. Costs 1 query. Also adds this test function
-                                                       to your data for future COMPUTE: solve.
+                                                       current fit. Free (no query cost).
                                                        (requires solve first)
     COMPUTE: term_integrals <expression>             → returns all three weight integrals (free)
         diffusion: ∫ u'(x)·φ'(x) dx
@@ -271,18 +294,8 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
 
         type_counts = {"polynomial": 0, "trigonometric": 0, "exponential": 0, "localized": 0, "other": 0}
         for r in rows:
-            spec = r.get("spec", "").lower()
-            if "exp(" in spec and ("*(" in spec or "*(x" in spec):
-                if any(c in spec for c in ["-", "**2"]):
-                    type_counts["localized"] += 1
-                else:
-                    type_counts["exponential"] += 1
-            elif "sin" in spec or "cos" in spec:
-                type_counts["trigonometric"] += 1
-            elif "exp" in spec:
-                type_counts["exponential"] += 1
-            else:
-                type_counts["polynomial"] += 1
+            family = count_atoms(r.get("spec", ""))
+            type_counts[family] += 1
 
         return {
             "status": "ok",
@@ -299,8 +312,7 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
     def verify(self, spec: str) -> dict:
         """
         Check estimated coefficients against the true PDE response.
-        Costs 1 query. Compares predicted LHS (from â,b̂,ĉ) to actual ∫fφ.
-        Also stores G data so future COMPUTE: solve benefits from this query.
+        Free (no query cost). Read-only — does not modify session state.
         Requires COMPUTE: solve to have been called first.
         """
         if self.last_solve_coeffs is None:
@@ -316,9 +328,6 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
                 "message": error,
                 "queries_remaining": self.max_queries - self.queries_used,
             }
-
-        if self.queries_used >= self.max_queries:
-            return {"status": "error", "message": "Query budget exhausted.", "queries_remaining": 0}
 
         x_q = self.solution.x
         dx = x_q[1] - x_q[0]
@@ -355,23 +364,6 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
         )
 
         # Store G data so future solves benefit from this query
-        G_diff  = [round(I(psi_q[j] * u_x_q * dphi_q), 12) for j in range(n_b)]
-        G_adv   = [round(I(psi_q[j] * u_x_q * phi_q),  12) for j in range(n_b)]
-        G_react = [round(I(psi_q[j] * u_q   * phi_q),  12) for j in range(n_b)]
-        G_src   = [round(I(psi_q[j]          * phi_q),  12) for j in range(n_b)]
-
-        self.queries_used += 1
-
-        record = {
-            "spec": spec,
-            "integral_f_phi": actual_f_phi,
-            "query_number": self.queries_used,
-            "queries_remaining": self.max_queries - self.queries_used,
-            "_G_diff": G_diff, "_G_adv": G_adv,
-            "_G_react": G_react, "_G_src": G_src,
-        }
-        self.history.append(record)
-
         return {
             "status": "ok",
             "type": "verify",
@@ -379,7 +371,6 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
             "predicted_lhs": predicted_lhs,
             "actual_f_phi": actual_f_phi,
             "discrepancy": round(abs(predicted_lhs - actual_f_phi), 12),
-            "query_number": self.queries_used,
             "queries_remaining": self.max_queries - self.queries_used,
         }
 
@@ -521,7 +512,7 @@ def format_check_result(response: dict) -> str:
         f"  Predicted LHS (â·∫u'φ' + b̂·∫u'φ + ĉ·∫uφ) = {response['predicted_lhs']:+.12f}\n"
         f"  Actual    ∫f·φ dx                           = {response['actual_f_phi']:+.12f}\n"
         f"  Discrepancy:                                  {response['discrepancy']:.6e}\n"
-        f"  (Query {response['query_number']}, {response['queries_remaining']} remaining)"
+        f"  (free check — {response['queries_remaining']} queries remaining)"
     )
 
 
@@ -792,6 +783,7 @@ Rules:
 - COMPUTE: eval_solution is free and unlimited.
 - COMPUTE: solve is free and unlimited — call it after every few queries
   to track how your estimates evolve. This is good experimental practice.
+- COMPUTE: check is free — use it to verify your estimates against new test functions.
 - You may NOT PREDICT in the same response as a QUERY.
 """
 
@@ -891,7 +883,6 @@ def dispatch_turn(session: ProbeSession, llm_text: str, actions: list[dict],
                 if run_log is not None and resp is not None and resp.get("status") == "ok":
                     run_log["verifications"].append({
                         "turn": turn,
-                        "query_number": resp["query_number"],
                         "test_function": resp["spec"],
                         "predicted_lhs": float(resp["predicted_lhs"]),
                         "actual_rhs": float(resp["actual_f_phi"]),
@@ -1271,12 +1262,12 @@ def plot_auc_curves(efficiency_results: dict, save_path: Optional[str] = None):
             if not finite:
                 continue
             qs, es = zip(*finite)
-            auc = result[f"auc_{coeff}"]
+            mean_err = result[f"auc_{coeff}"]
             ax.plot(qs, es,
                     color=coeff_colors[coeff],
                     linestyle=lstyle,
                     linewidth=2,
-                    label=f"{model_name}  (AUC={auc:.3f})")
+                    label=f"{model_name}  (mean={mean_err:.3f})")
             ax.scatter([qs[-1]], [es[-1]],
                        color=coeff_colors[coeff], s=50, zorder=5)
 
@@ -1291,7 +1282,7 @@ def plot_auc_curves(efficiency_results: dict, save_path: Optional[str] = None):
         ax.grid(True, alpha=0.3)
 
     fig.suptitle("Coefficient recovery curves by model\n"
-                 "AUC = mean error over session (lower = better)",
+                 "Mean error across solves (lower = better)",
                  fontsize=12, fontweight="bold")
     plt.tight_layout()
     if save_path:
@@ -1407,16 +1398,8 @@ def compute_query_diversity(run_log):
         taxonomy = {"polynomial": 0, "trigonometric": 0,
                     "exponential": 0, "localized": 0, "other": 0}
         for q in run_log["queries"]:
-            spec = q.get("test_function", "").lower()
-            if "sin" in spec or "cos" in spec:
-                taxonomy["trigonometric"] += 1
-            elif "exp(" in spec:
-                if "-" in spec or "**2" in spec:
-                    taxonomy["localized"] += 1
-                else:
-                    taxonomy["exponential"] += 1
-            else:
-                taxonomy["polynomial"] += 1
+            family = count_atoms(q.get("test_function", ""))
+            taxonomy[family] += 1
 
     counts = [v for v in taxonomy.values() if v > 0]
     total = sum(counts)
@@ -1706,17 +1689,7 @@ def main():
             print(f"Could not generate plot: {e}")
 
     if "efficiency" in result:
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as _plt
-            efficiency_results = {args.model: result["efficiency"]}
-            auc_path = os.path.join(args.output_dir, run_stem + "_auc.png")
-            fig = plot_auc_curves(efficiency_results, save_path=auc_path)
-            _plt.close(fig)
-            print(f"AUC comparison plot saved to {auc_path}")
-        except Exception as e:
-            print(f"Could not generate AUC plot: {e}")
+        pass  # AUC plot removed; error curves are stored in the JSON
 
     print(f"\n{'=' * 70}")
     print(f"Session complete: {result['turns']} turns, {result['queries_used']} queries used")

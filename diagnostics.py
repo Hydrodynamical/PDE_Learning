@@ -447,17 +447,17 @@ def plot_session_results(session, prediction: dict, save_path: str = None) -> pl
         true_vals = true_fn(x)
         rec_fn = CoefficientFunction(basis, np.array(prediction[name]))
         rec_vals = rec_fn(x)
-        max_err = np.max(np.abs(true_vals - rec_vals))
+        l1_err = np.trapezoid(np.abs(true_vals - rec_vals), x)
 
         ax.plot(x, true_vals, color=COLORS.get(name, "#333"), linewidth=2.2,
                 label="true", zorder=3)
         ax.plot(x, rec_vals, color=COLORS.get(name, "#333"), linewidth=1.5,
                 linestyle="--", alpha=0.75, label="recovered", zorder=3)
         ax.fill_between(x, true_vals, rec_vals, alpha=0.18,
-                        color=COLORS.get(name, "#333"), zorder=2)
+                        color=COLORS.get(name, "#333"), zorder=2, label="error")
         ax.axhline(0, color='gray', linewidth=0.3, linestyle='--')
         ax.set_xlabel("$x$")
-        ax.set_title(f"{title}   (err = {max_err:.4f})", fontsize=10)
+        ax.set_title(f"{title}   ($L^1$ = {l1_err:.4f})", fontsize=10)
         ax.legend(fontsize=7, loc="best")
         ax.set_xlim(pde.domain)
 
@@ -472,7 +472,7 @@ def plot_session_results(session, prediction: dict, save_path: str = None) -> pl
             f"Basis: {basis.n_basis} Legendre polynomials",
             f"Unknowns: {4 * basis.n_basis}",
             "",
-            "Coefficient errors:",
+            "Coefficient errors ($\\|\\cdot\\|_\\infty$):",
             f"  a(x):  {score.coeff_error_a:.4f}",
             f"  b(x):  {score.coeff_error_b:.4f}",
             f"  c(x):  {score.coeff_error_c:.4f}",

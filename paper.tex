@@ -184,8 +184,12 @@ Free.
 \paragraph{Consistency check (\texttt{COMPUTE: check}).}
 Compares the predicted left-hand side of~\eqref{eq:pde} (from estimated
 $\hat a, \hat b, \hat c$) to the actual $\int f\varphi\dd x$ for a new
-test function.  Costs one query.  The system warns the model when zero
-discrepancy is expected due to exact determination.
+test function.  Free and read-only: the measurement is not added to the
+solver's equation system.  The system warns the model when zero discrepancy
+is expected due to exact determination.  This design separates
+\emph{information acquisition} (queries, which are budgeted) from
+\emph{verification} (checks, which are free), allowing us to measure whether
+models engage in self-assessment independently of budget pressure.
 
 \paragraph{Submission (\texttt{PREDICT}).}
 Ends the session and submits the coefficients from the model's most recent
@@ -345,10 +349,11 @@ hallmark of scientific planning.  We report:
           was called.
     \item \textbf{Budget utilization}: fraction of the query budget used
           (queries used / budget).
-    \item \textbf{Check-to-query ratio}: fraction of budget spent on
-          consistency checks vs.\ new queries.  High ratios indicate
-          inhibitory control failure (the model wastes budget on
-          uninformative verification instead of gathering new data).
+    \item \textbf{Check count}: number of free consistency checks performed.
+          Since checks do not consume budget, high check counts relative
+          to queries reflect a behavioral preference for verification over
+          information acquisition---a signature of inhibitory control
+          hesitation rather than a direct budget cost.
 \end{itemize}
 
 \subsection{Cognitive Flexibility: Family Entropy and Query Space Conditioning}
@@ -356,7 +361,12 @@ hallmark of scientific planning.  We report:
 The system classifies each test function into one of $K = 5$ families:
 polynomial ($x^m(1{-}x)^n$ products), trigonometric ($\sin$, $\cos$
 combinations), exponential ($e^{\alpha x}$ weighted), localized
-(narrow-support functions), and other.  Let $p_i$ be the fraction of
+(narrow-support functions), and other.  Exponential and localized functions
+are distinguished by the sign of the exponent: exponential functions
+(e.g., $e^x \cdot x(1{-}x)$) have a positive exponent and shift the
+integral's center of mass without spatial localization, while localized
+functions (e.g., $e^{-10(x-0.3)^2}\sin(\pi x)$) have a negative exponent
+and concentrate information in a spatial region.  Let $p_i$ be the fraction of
 queries in family $i$.  The Shannon entropy
 \[
     H = -\sum_{i=1}^{K} p_i \log_2 p_i
@@ -445,30 +455,45 @@ specifically goal setting and maintenance (\S7.8.1).
 
 \subsection{Models}
 
-We evaluate three OpenAI models spanning two generations:
+We evaluate six models spanning three providers and two capability tiers:
 
-\begin{itemize}[nosep]
-    \item \textbf{GPT-4o}: the last major pre-reasoning-era model (2024).
-    \item \textbf{GPT-5.4-mini}: the efficient tier of the current GPT-5
-          family.
-    \item \textbf{GPT-5.4}: the current frontier reasoning model.
-\end{itemize}
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Provider} & \textbf{Large} & \textbf{Small} \\
+\midrule
+Anthropic & Claude Opus 4.6    & Claude Sonnet 4.6 \\
+OpenAI    & GPT-5.4            & GPT-5.4-mini \\
+Google    & Gemini 3.1 Pro     & Gemini 3 Flash \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-\noindent All models use the standard prompt (with mathematical context),
-temperature 0 (where available), and the same system prompt and tool
-interface.
+\noindent All models are accessed through the same benchmark infrastructure,
+ensuring identical tool interfaces, system prompts, and parsing logic across
+providers.  OpenAI models use \texttt{reasoning\_effort: medium} (see
+Limitations).  All models use the standard prompt with mathematical context.
 
 \subsection{Protocol}
 
 Each model is evaluated at three difficulty levels (easy, medium, hard)
-across two random seeds (42, 137), for a total of $3 \times 3 \times 2
-= 18$ runs.  Budgets and turn limits are auto-scaled from difficulty.
-Each run produces a JSON log containing: the full turn-by-turn transcript,
-every query and its result, every solve with coefficient errors against
-ground truth, every consistency check, every term integral call,
-the post-hoc efficiency curve (error at each query count), and the
-metacognitive metrics ($\sigma$-curves, monitoring reports, control
-efficiency).
+across five random seeds, with and without the mathematical context prompt
+(baseline ablation), for a total of $6 \times 3 \times 5 \times 2 = 180$
+runs.  Budgets and turn limits are auto-scaled from difficulty.  Each run
+produces a JSON log containing: the full turn-by-turn transcript, every
+query and its result, every solve with coefficient errors against ground
+truth, every consistency check, every term integral call, the post-hoc
+efficiency curve (error at each query count), and the metacognitive metrics
+($\sigma$-curves, monitoring reports, control efficiency).
+
+The benchmark is available as a Kaggle Community Benchmark.  The
+\texttt{kaggle.py} adapter wraps the core benchmark loop using the
+\texttt{kaggle-benchmarks} SDK, importing \texttt{dispatch\_turn()} from
+the main benchmark code to ensure identical tool dispatch logic across the
+command-line and notebook interfaces.  The full sweep costs approximately
+\$25 at standard API pricing (calibrated from Opus 4.6 runs at \$0.85/run),
+making reproduction accessible.
 
 %----------------------------------------------------------------------
 \section{Results}
@@ -534,8 +559,8 @@ contributes negligibly to the weak form when $|u(x)|$ is small.
 \paragraph{Finding 3: Behavioral divergence.}
 The models exhibit qualitatively different strategies.  GPT-5.4 calls
 \texttt{solve} 3--7 times per run, watches coefficients converge, and
-uses 95--100\% of its budget.  GPT-5.4-mini typically solves once, often
-burns budget on consistency checks, and stops early.  GPT-4o fails at
+uses 95--100\% of its budget.  GPT-5.4-mini typically solves once, relies
+heavily on consistency checks rather than collecting new queries, and stops early.  GPT-4o fails at
 hard difficulty because it cannot reliably format expressions the parser
 accepts (using \verb|^| instead of \verb|**|, or appending LaTeX markup).
 
@@ -548,7 +573,8 @@ distinguish the models.
 \centering
 \caption{Full cognitive profile by model (medians across all scored runs).
 $H$ = normalized family entropy; $R$ = improvement ratio; $W$ = wasted
-turn fraction; Tail = turns after last solve.}\label{tab:behavioral}
+turn fraction; Tail = turns after last solve.  Check\% = checks as a
+fraction of queries (checks are free and do not consume budget).}\label{tab:behavioral}
 \small
 \begin{tabular}{lcccccccc}
 \toprule
@@ -566,8 +592,9 @@ GPT-5.4      & 4   & 97\%  & 8\%  & 0.35 & 4.2 & 0.8 & 0.02 & 1 \\
 design: solve, assess convergence, add targeted queries, re-solve.
 GPT-5.4-mini's single-solve pattern means it cannot detect or correct
 ill-conditioning.  The check-to-query ratio reveals that GPT-5.4-mini
-spends the most budget on uninformative consistency tests (an inhibitory
-control failure), while GPT-5.4 spends the least.
+performs the most consistency checks relative to queries---a behavioral
+signature of verification preference over information acquisition---while
+GPT-5.4 checks the least, preferring to expand its query set.
 
 \paragraph{Finding 4: The $H = 0$ / $C_k = 0.99$ dissociation.}
 GPT-5.4-mini medium runs show a striking dissociation: control efficiency
@@ -666,6 +693,50 @@ the nature of the task rather than a design limitation.  Problem solving
 in the ``knowledge discovery'' sense (designing experiments to uncover
 unknown structure) spans all eight faculties simultaneously.
 
+\subsection{Structural Identifiability}
+
+A natural concern is whether the benchmark is fundamentally fair: can the
+coefficient functions be uniquely identified from weak-form data in principle?
+The answer is yes.  \citet{egger2014simultaneous} prove uniqueness of
+simultaneous identification of diffusion and absorption coefficients from the
+Dirichlet-to-Neumann map for a quasilinear elliptic problem.
+\citet{browning2024structural} study linear reaction--advection--diffusion
+systems and show that all three coefficients are structurally identifiable
+from solution data under generic conditions, though the identifiability
+degrades in specific degenerate cases.
+\citet{browning2025parabolic} frame identifiability via the Fredholm
+alternative, identifying specific boundary conditions that can cause
+non-identifiability.
+
+In our setting, the weak form with sufficiently many linearly independent
+test functions uniquely determines all $4N$ coefficients---the system is
+structurally identifiable in the infinite-data limit.  The ill-conditioning
+documented in Section~\ref{sec:illcond} is a \emph{practical} identifiability
+challenge arising from finite budget and the specific test functions chosen,
+not a fundamental limitation.  The benchmark measures how well models handle
+this practical challenge, which is precisely what makes it scientifically
+interesting.
+
+\subsection{Comparison to Existing Benchmarks}
+
+Existing mathematical reasoning benchmarks test whether models can
+\emph{answer} mathematical questions.  Our benchmark tests whether models can
+\emph{do} mathematics---design experiments, interpret results, diagnose
+failures, and adapt strategy within a scientific investigation.
+
+Recent related work includes HARDMath2~\citep{hardmath2025} (211 problems
+covering nonlinear PDEs, boundary layers, and WKB approximation) and
+Mamo~\citep{mamo2025} (benchmarking LLMs on constructing ODE and linear
+programming models with solver verification).  HARDMath2 is static Q\&A with
+no interactive probing.  Mamo is process-oriented like our benchmark but
+focuses on model construction rather than inverse identification.
+FrontierMath (Epoch AI) provides extremely hard static problems but no
+multi-turn experimental design.
+
+The multi-turn, tool-using structure of our benchmark is closer to agentic
+science benchmarks than to traditional math evaluation, and uniquely provides
+mathematically grounded metacognitive metrics as a core output.
+
 \subsection{Limitations}
 
 The benchmark evaluates models through text-based tool use, which
@@ -745,6 +816,35 @@ A.~Faust, C.~Farabet, and S.~Legg.
 \newblock Position: Levels of {AGI} for operationalizing progress on the
 path to {AGI}.
 \newblock In \emph{ICML}, 2024.
+
+\bibitem[Browning et al.(2024)]{browning2024structural}
+A.~P. Browning, N.~Tasca, C.~Falc\'o, and R.~E. Baker.
+\newblock Structural identifiability analysis of linear
+  reaction--advection--diffusion processes in mathematical biology.
+\newblock \emph{Proc. R. Soc. A}, 480, 2024.
+
+\bibitem[Browning et al.(2025)]{browning2025parabolic}
+A.~P. Browning, N.~Tasca, C.~Falc\'o, and R.~E. Baker.
+\newblock Structural identifiability of linear-in-parameter parabolic {PDEs}
+  through auxiliary elliptic operators.
+\newblock \emph{J. Math. Biology}, 2025.
+
+\bibitem[Egger et al.(2014)]{egger2014simultaneous}
+H.~Egger, J.-F. Pietschmann, and M.~Schlottbom.
+\newblock Simultaneous identification of diffusion and absorption coefficients
+  in a quasilinear elliptic problem.
+\newblock \emph{Inverse Problems}, 30(3):035009, 2014.
+
+\bibitem[HARDMath2(2025)]{hardmath2025}
+HARDMath2 Benchmark.
+\newblock Benchmarking {LLMs} on hard applied mathematics: {PDEs}, boundary
+  layers, and {WKB} approximation.
+\newblock 2025.
+
+\bibitem[Mamo(2025)]{mamo2025}
+Mamo Benchmark.
+\newblock Mathematical model construction with {LLMs} and solver verification.
+\newblock 2025.
 
 \end{thebibliography}
 
