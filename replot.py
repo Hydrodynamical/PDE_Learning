@@ -9,6 +9,7 @@ Produces:
     *_metrics.png     — behavioral + metacognitive profile (4-panel)
     *_auc.png         — error convergence curves
 """
+import os
 import sys
 import json
 import numpy as np
@@ -78,6 +79,17 @@ def overlay_actions(ax, d, x_is_turns=False):
 def load_run(path):
     with open(path) as f:
         return json.load(f)
+
+
+def load_all_runs(directory):
+    """Load all run JSON files from a directory, sorted by seed."""
+    import glob
+    paths = sorted(glob.glob(os.path.join(directory, "run_*.json")))
+    runs = []
+    for p in paths:
+        with open(p) as f:
+            runs.append(json.load(f))
+    return runs
 
 
 # ── Figure 1: Coefficient recovery dashboard ─────────────────────────────
@@ -541,28 +553,282 @@ def plot_deep(d, save_path=None):
     return fig
 
 
+# ── Multi-seed summary ───────────────────────────────────────────────────
+
+def plot_multiseed(runs, save_path=None):
+    """Five-panel multi-seed summary figure."""
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+
+    if not runs:
+        print("No runs to plot.")
+        return None
+
+    cfg = runs[0]["config"]
+    model = cfg.get("model", "?")
+    difficulty = cfg.get("difficulty", "?")
+    n_seeds = len(runs)
+
+    fig = plt.figure(figsize=(16, 13))
+    gs = GridSpec(3, 2, figure=fig, hspace=0.4, wspace=0.3,
+                  height_ratios=[1, 1, 0.25])
+    fig.suptitle(f"Multi-seed Summary — {model}  ({difficulty}, {n_seeds} seeds)",
+                 fontsize=13, fontweight="bold")
+
+    rng = np.random.default_rng(42)
+
+    # ── Panel 1: Error convergence overlay (top-left) ──
+    ax = fig.add_subplot(gs[0, 0])
+    all_curves = {coeff: [] for coeff in ["a", "b", "c"]}
+    all_curves["total"] = []
+
+    for d in runs:
+        solves = d.get("solves", [])
+        if not solves:
+            continue
+        qcounts = [s.get("queries_at_solve") or s["n_equations"] for s in solves]
+        for coeff in ["a", "b", "c"]:
+            errs = [s["coeff_errors"][coeff] for s in solves]
+            all_curves[coeff].append((qcounts, errs))
+            ax.semilogy(qcounts, errs, "-", color=COLORS[coeff], alpha=0.2, linewidth=0.8)
+        totals = [s["coeff_errors"]["total"] for s in solves]
+        all_curves["total"].append((qcounts, totals))
+        ax.semilogy(qcounts, totals, "--", color="black", alpha=0.15, linewidth=0.8)
+
+    budget = cfg.get("max_queries", 48)
+    n_unknowns = cfg.get("unknowns", 32)
+    common_q = np.arange(n_unknowns, budget + 1)
+    for coeff in ["a", "b", "c"]:
+        interp_errs = []
+        for qcounts, errs in all_curves[coeff]:
+            interp_errs.append(np.interp(common_q, qcounts, errs,
+                                         left=errs[0], right=errs[-1]))
+        if interp_errs:
+            ax.semilogy(common_q, np.median(interp_errs, axis=0), "-",
+                        color=COLORS[coeff], linewidth=2.5, label=f"{coeff}(x)")
+
+    interp_totals = []
+    for qcounts, errs in all_curves["total"]:
+        interp_totals.append(np.interp(common_q, qcounts, errs,
+                                       left=errs[0], right=errs[-1]))
+    if interp_totals:
+        ax.semilogy(common_q, np.median(interp_totals, axis=0), "--",
+                    color="black", linewidth=2.5, label="total")
+
+    ax.axhline(0.1, color="gray", linestyle=":", alpha=0.5)
+    for d in runs:
+        total = d["results"]["coefficient_errors"]["total"]
+        seed = d["config"]["seed"]
+        ax.annotate(f"s{seed}", xy=(budget + 0.5, total),
+                    fontsize=6, color="gray", alpha=0.6)
+    ax.set_xlabel("Queries at solve")
+    ax.set_ylabel("Coefficient error")
+    ax.set_title("Error convergence (thin = per seed, thick = median)", fontsize=10)
+    ax.legend(fontsize=8, ncol=2)
+    ax.grid(True, alpha=0.15)
+
+    # ── Panel 2: Behavioral fingerprint (top-right) ──
+    ax = fig.add_subplot(gs[0, 1])
+
+    metrics = [
+        ("budget_utilization", "Budget utilization", 1.0),
+        ("improvement_ratio", "Improvement ratio", None),
+        ("family_entropy_normalized", "Family entropy", 1.0),
+        ("solve_count", "Solves / run", None),
+        ("check_count", "Checks / run", None),
+        ("term_integral_count", "Term integrals / run", None),
+        ("wasted_turn_fraction", "Wasted turn %", 1.0),
+    ]
+
+    y_pos = np.arange(len(metrics))
+    bar_colors = ["#3b82f6", "#10b981", "#f97316", "#16a34a", "#f59e0b", "#06b6d4", "#ef4444"]
+
+    for i, (key, label, max_val) in enumerate(metrics):
+        if key == "budget_utilization":
+            vals = [d.get("behavioral_metrics", {}).get(key,
+                    d.get("behavioral_metrics", {}).get("queries_used", 0) /
+                    d.get("config", {}).get("max_queries", 1))
+                    for d in runs]
+        else:
+            vals = [d.get("behavioral_metrics", {}).get(key, 0) for d in runs]
+        vals = [v if v is not None else 0 for v in vals]
+        med = np.median(vals)
+
+        if max_val is not None:
+            bar_val = min(med / max_val, 1.0)
+        else:
+            scale = max(max(vals), 1)
+            bar_val = med / scale
+
+        ax.barh(i, bar_val, color=bar_colors[i % len(bar_colors)],
+                alpha=0.7, height=0.6, edgecolor="white", linewidth=0.5)
+
+        if key in ("wasted_turn_fraction", "budget_utilization"):
+            val_text = f"{med:.0%}"
+        elif key == "family_entropy_normalized":
+            val_text = f"{med:.2f}"
+        elif key == "improvement_ratio":
+            val_text = f"{med:.1f}×"
+        else:
+            val_text = f"{med:.1f}"
+
+        ax.text(bar_val + 0.02, i, val_text, va="center", fontsize=9, fontweight="bold")
+
+        for v in vals:
+            if max_val is not None:
+                sv = min(v / max_val, 1.0)
+            else:
+                sv = v / scale if scale > 0 else 0
+            ax.plot(sv, i, "o", color=bar_colors[i % len(bar_colors)],
+                    alpha=0.3, markersize=4)
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([m[1] for m in metrics], fontsize=9)
+    ax.set_xlim(0, 1.3)
+    ax.set_xticks([])
+    ax.invert_yaxis()
+    ax.set_title("Behavioral fingerprint (median + seeds)", fontsize=10)
+    ax.axvline(1.0, color="gray", linestyle=":", alpha=0.3)
+
+    # ── Panel 3: Family bars (middle-left) ──
+    ax = fig.add_subplot(gs[1, 0])
+    all_families = ["polynomial", "trigonometric", "exponential", "localized", "other"]
+    per_seed_counts = {f: [] for f in all_families}
+    for d in runs:
+        fc = d.get("behavioral_metrics", {}).get("family_counts", {})
+        for f in all_families:
+            per_seed_counts[f].append(fc.get(f, 0))
+    active = [f for f in all_families if sum(per_seed_counts[f]) > 0]
+    x_pos = np.arange(len(active))
+    medians = [np.median(per_seed_counts[f]) for f in active]
+    fam_colors = [FAMILY_COLORS.get(f, "#94a3b8") for f in active]
+    ax.bar(x_pos, medians, color=fam_colors, edgecolor="white", linewidth=0.5, alpha=0.8)
+    for f_idx, f in enumerate(active):
+        vals = per_seed_counts[f]
+        jitter = rng.uniform(-0.15, 0.15, len(vals))
+        ax.scatter(f_idx + jitter, vals, color=fam_colors[f_idx], s=15,
+                   alpha=0.5, edgecolors="none", zorder=5)
+        ax.text(f_idx, max(vals) + 0.5, f"{np.median(vals):.0f}",
+                ha="center", va="bottom", fontsize=9)
+    entropies = [d.get("behavioral_metrics", {}).get("family_entropy_normalized", 0)
+                 for d in runs]
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(active, rotation=30, fontsize=9)
+    ax.set_ylabel("Count")
+    ax.set_title(f"Test function families (median entropy = {np.median(entropies):.2f})",
+                 fontsize=10)
+
+    # ── Panel 4: Conditioning bars (middle-right) ──
+    ax = fig.add_subplot(gs[1, 1])
+    block_names = ["diffusion", "advection", "reaction"]
+    block_colors = [COLORS["a"], COLORS["b"], COLORS["c"]]
+    per_seed_kappa = {b: [] for b in block_names}
+    for d in runs:
+        blocks = d.get("behavioral_metrics", {}).get("query_space_blocks", {})
+        for b in block_names:
+            per_seed_kappa[b].append(blocks.get(b, {}).get("condition", 0))
+    x_pos = np.arange(len(block_names))
+    medians = [np.median(per_seed_kappa[b]) for b in block_names]
+    ax.bar(x_pos, medians, color=block_colors, edgecolor="white", linewidth=0.5, alpha=0.8)
+    for b_idx, b in enumerate(block_names):
+        vals = per_seed_kappa[b]
+        jitter = rng.uniform(-0.15, 0.15, len(vals))
+        ax.scatter(b_idx + jitter, vals, color=block_colors[b_idx], s=15,
+                   alpha=0.5, edgecolors="none", zorder=5)
+        ax.text(b_idx, max(vals) + 0.5, f"κ={np.median(vals):.1f}",
+                ha="center", va="bottom", fontsize=9)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(block_names, fontsize=9)
+    ax.set_ylabel("Condition number κ")
+    ax.set_title("Conditioning by block (higher = harder)", fontsize=10)
+
+    # ── Panel 5: Action timeline heatmap (bottom strip) ──
+    ax_seq = fig.add_subplot(gs[2, :])
+    action_colors_map = {
+        "query":          [0.23, 0.51, 0.98],
+        "solve":          [0.09, 0.64, 0.26],
+        "check":          [0.96, 0.62, 0.04],
+        "term_integrals": [0.02, 0.71, 0.83],
+        "eval_solution":  [0.65, 0.55, 0.96],
+        "predict":        [0.94, 0.27, 0.27],
+        "reasoning":      [0.90, 0.91, 0.92],
+    }
+    max_turns = max(len(d.get("turns", [])) for d in runs)
+    heatmap = np.ones((n_seeds, max_turns, 3)) * 0.95
+    for row, d in enumerate(runs):
+        for col, t in enumerate(d.get("turns", [])):
+            content = (t.get("content", "") or "").lower()
+            actions = t.get("parsed_actions", [])
+            if "query" in actions:
+                act = "query"
+            elif "predict" in actions:
+                act = "predict"
+            elif "compute" in actions:
+                if "solve" in content and "eval" not in content:
+                    act = "solve"
+                elif "check" in content or "verify" in content:
+                    act = "check"
+                elif "term_integral" in content:
+                    act = "term_integrals"
+                elif "eval_solution" in content:
+                    act = "eval_solution"
+                else:
+                    act = "reasoning"
+            else:
+                act = "reasoning"
+            heatmap[row, col] = action_colors_map.get(act, [0.9, 0.91, 0.92])
+    ax_seq.imshow(heatmap, aspect="auto", interpolation="nearest")
+    ax_seq.set_yticks(range(n_seeds))
+    ax_seq.set_yticklabels([f"s{d['config']['seed']}" for d in runs], fontsize=8)
+    ax_seq.set_xlabel("Turn")
+    ax_seq.set_title("Action sequences", fontsize=10)
+    legend_items = [
+        Patch(color=action_colors_map["query"],          label="query"),
+        Patch(color=action_colors_map["solve"],          label="solve"),
+        Patch(color=action_colors_map["check"],          label="check"),
+        Patch(color=action_colors_map["term_integrals"], label="term_integrals"),
+        Patch(color=action_colors_map["predict"],        label="predict"),
+    ]
+    ax_seq.legend(handles=legend_items, fontsize=6, ncol=5, loc="upper right",
+                  bbox_to_anchor=(1.0, -0.15))
+
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
 # ── Main ─────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python replot.py <run_*.json> [--no-show]")
+        print("Usage:")
+        print("  python replot.py <run_*.json> [--no-show]     # single run")
+        print("  python replot.py <directory/> [--no-show]      # multi-seed summary")
         sys.exit(1)
 
     path = sys.argv[1]
     show = "--no-show" not in sys.argv
-    d = load_run(path)
-    stem = path.replace(".json", "")
 
-    print_summary(d)
-
-    plot_dashboard(d, save_path=f"{stem}_dashboard.png")
-    print(f"  Saved: {stem}_dashboard.png")
-
-    plot_metrics(d, save_path=f"{stem}_metrics.png")
-    print(f"  Saved: {stem}_metrics.png")
-
-    plot_deep(d, save_path=f"{stem}_deep.png")
-    print(f"  Saved: {stem}_deep.png")
+    if os.path.isdir(path):
+        runs = load_all_runs(path)
+        if not runs:
+            print(f"No run_*.json files found in {path}")
+            sys.exit(1)
+        print(f"Loaded {len(runs)} runs from {path}")
+        save_path = os.path.join(path, "multiseed_summary.png")
+        plot_multiseed(runs, save_path=save_path)
+        print(f"  Saved: {save_path}")
+    else:
+        d = load_run(path)
+        stem = path.replace(".json", "")
+        print_summary(d)
+        plot_dashboard(d, save_path=f"{stem}_dashboard.png")
+        print(f"  Saved: {stem}_dashboard.png")
+        plot_metrics(d, save_path=f"{stem}_metrics.png")
+        print(f"  Saved: {stem}_metrics.png")
+        plot_deep(d, save_path=f"{stem}_deep.png")
+        print(f"  Saved: {stem}_deep.png")
 
     if show:
         plt.show()

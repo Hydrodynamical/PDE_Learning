@@ -28,13 +28,13 @@ from main_loop import (
 # ── Model registry ──────────────────────────────────────────────────────────
 
 MODELS = {
-    # OpenAI — three generations for longitudinal comparison
-    "gpt-4o":       {"provider": "openai",    "reasoning_effort": None},
-    "gpt-5.4-mini": {"provider": "openai",    "reasoning_effort": "medium"},
-    "gpt-5.4":      {"provider": "openai",    "reasoning_effort": "medium"},
-    # Anthropic (uncomment to include)
-    # "claude-sonnet-4-20250514": {"provider": "anthropic", "reasoning_effort": None},
-    # "claude-opus-4-6":          {"provider": "anthropic", "reasoning_effort": None},
+    "gpt-4o":         {"provider": "openai",     "reasoning_effort": None},
+    "gpt-5.4-mini":   {"provider": "openai",     "reasoning_effort": "medium"},
+    "gpt-5.4":        {"provider": "openai",     "reasoning_effort": "medium"},
+    "gemini-3.1-pro": {"provider": "google",     "reasoning_effort": None},
+    "gemini-3-flash-preview": {"provider": "google",     "reasoning_effort": None},
+    "opus-4.6":       {"provider": "anthropic",  "reasoning_effort": None},
+    "sonnet-4.6":     {"provider": "anthropic",  "reasoning_effort": None},
 }
 
 DEFAULT_MODELS = ["gpt-4o", "gpt-5.4-mini", "gpt-5.4"]
@@ -67,7 +67,7 @@ def make_backend(model: str, provider: str, reasoning_effort: str = None):
 
 def run_single(model: str, provider: str, difficulty: str, seed: int,
                output_dir: str, baseline: bool = False,
-               reasoning_effort: str = None) -> dict:
+               reasoning_effort: str = None, no_plot: bool = False) -> dict:
     """Execute one benchmark run and save all outputs. Returns summary dict."""
 
     config = DIFFICULTY_CONFIG[difficulty]
@@ -123,8 +123,8 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
         sc = result["score"]
         run_log["results"] = {
             "coefficient_errors": {
-                "a": sc.get("a_coeff_error"), "b": sc.get("b_coeff_error"),
-                "c": sc.get("c_coeff_error"), "f": sc.get("f_coeff_error"),
+                "a": sc.get("coeff_error_a"), "b": sc.get("coeff_error_b"),
+                "c": sc.get("coeff_error_c"), "f": sc.get("coeff_error_f"),
                 "total": sc.get("total_coeff_error"),
             },
             "pointwise_errors": {
@@ -214,30 +214,31 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
     with open(log_path, "w") as f:
         json.dump(run_log, f, indent=2, default=str)
 
-    # Dashboard plot
-    if session.prediction_submitted and "prediction" in result:
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            from diagnostics import plot_session_results
-            import matplotlib.pyplot as plt
-            fig = plot_session_results(session, result["prediction"],
-                                       save_path=os.path.join(output_dir, stem + "_dashboard.png"))
-            plt.close(fig)
-        except Exception:
-            pass
+    if not no_plot:
+        # Dashboard plot
+        if session.prediction_submitted and "prediction" in result:
+            try:
+                import matplotlib
+                matplotlib.use("Agg")
+                from diagnostics import plot_session_results
+                import matplotlib.pyplot as plt
+                fig = plot_session_results(session, result["prediction"],
+                                           save_path=os.path.join(output_dir, stem + "_dashboard.png"))
+                plt.close(fig)
+            except Exception:
+                pass
 
-    # AUC plot
-    if "efficiency" in result:
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
-            fig = plot_auc_curves({model: result["efficiency"]},
-                                  save_path=os.path.join(output_dir, stem + "_auc.png"))
-            plt.close(fig)
-        except Exception:
-            pass
+        # AUC plot
+        if "efficiency" in result:
+            try:
+                import matplotlib
+                matplotlib.use("Agg")
+                import matplotlib.pyplot as plt
+                fig = plot_auc_curves({model: result["efficiency"]},
+                                      save_path=os.path.join(output_dir, stem + "_auc.png"))
+                plt.close(fig)
+            except Exception:
+                pass
 
     # ── Build summary ──
     summary = {
@@ -348,6 +349,10 @@ def main():
     parser.add_argument("--reasoning-effort", type=str, default=None,
                         choices=["none", "low", "medium", "high", "xhigh"],
                         help="Override reasoning effort for all OpenAI models")
+    parser.add_argument("--no-plot", action="store_true",
+                        help="Skip generating dashboard PNG (JSON only)")
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="Read sweep_results.json from output-dir, re-run only failed/missing seeds")
     args = parser.parse_args()
 
     seeds = parse_seeds(args.seeds)
@@ -366,7 +371,28 @@ def main():
         else:
             model_configs[m] = {"provider": "openai", "reasoning_effort": args.reasoning_effort}
 
-    total_runs = len(args.models) * len(args.difficulties) * len(seeds)
+    all_combos = [
+        (model, difficulty, seed)
+        for difficulty in args.difficulties
+        for model in args.models
+        for seed in seeds
+    ]
+
+    if args.retry_failed:
+        sweep_path = os.path.join(args.output_dir, "sweep_results.json")
+        if os.path.exists(sweep_path):
+            with open(sweep_path) as f:
+                existing = json.load(f)
+            done = set()
+            for r in existing:
+                if "error" not in r and r.get("total_coeff_error") is not None:
+                    done.add((r["model"], r["difficulty"], r["seed"]))
+            all_combos = [(m, d, s) for m, d, s in all_combos if (m, d, s) not in done]
+            print(f"Retrying {len(all_combos)} failed/missing seeds ({len(done)} already succeeded)")
+        else:
+            print(f"No sweep_results.json found in {args.output_dir}, running all")
+
+    total_runs = len(all_combos)
 
     print("=" * 70)
     print("PDE BENCHMARK SWEEP")
@@ -381,51 +407,60 @@ def main():
         print(f"Reasoning:    {args.reasoning_effort} (override)")
     print()
 
-    results = []
+    new_results = []
     run_num = 0
 
-    for difficulty in args.difficulties:
-        for model in args.models:
-            mcfg = model_configs[model]
-            provider = mcfg["provider"]
-            reasoning_effort = mcfg["reasoning_effort"]
-            for seed in seeds:
-                run_num += 1
-                tag = f"[{run_num}/{total_runs}] {model} / {difficulty} / s{seed}"
-                print(f"{tag} ...", end=" ", flush=True)
-                t0 = time.time()
-                try:
-                    summary = run_single(
-                        model=model,
-                        provider=provider,
-                        difficulty=difficulty,
-                        seed=seed,
-                        output_dir=args.output_dir,
-                        baseline=args.baseline,
-                        reasoning_effort=reasoning_effort,
-                    )
-                    results.append(summary)
-                    elapsed = time.time() - t0
-                    ce = summary.get("total_coeff_error", float("inf"))
-                    q = summary.get("queries_used", 0)
-                    print(f"err={ce:.4f}  q={q}  {elapsed:.0f}s")
-                except Exception as e:
-                    elapsed = time.time() - t0
-                    print(f"FAILED ({elapsed:.0f}s): {e}")
-                    results.append({
-                        "model": model, "provider": provider,
-                        "difficulty": difficulty, "seed": seed,
-                        "reasoning_effort": reasoning_effort,
-                        "error": str(e),
-                    })
+    for model, difficulty, seed in all_combos:
+        mcfg = model_configs[model]
+        provider = mcfg["provider"]
+        reasoning_effort = mcfg["reasoning_effort"]
+        run_num += 1
+        tag = f"[{run_num}/{total_runs}] {model} / {difficulty} / s{seed}"
+        print(f"{tag} ...", end=" ", flush=True)
+        t0 = time.time()
+        try:
+            summary = run_single(
+                model=model,
+                provider=provider,
+                difficulty=difficulty,
+                seed=seed,
+                output_dir=args.output_dir,
+                baseline=args.baseline,
+                reasoning_effort=reasoning_effort,
+                no_plot=args.no_plot,
+            )
+            new_results.append(summary)
+            elapsed = time.time() - t0
+            ce = summary.get("total_coeff_error", float("inf"))
+            q = summary.get("queries_used", 0)
+            print(f"err={ce:.4f}  q={q}  {elapsed:.0f}s")
+        except Exception as e:
+            elapsed = time.time() - t0
+            print(f"FAILED ({elapsed:.0f}s): {e}")
+            new_results.append({
+                "model": model, "provider": provider,
+                "difficulty": difficulty, "seed": seed,
+                "reasoning_effort": reasoning_effort,
+                "error": str(e),
+            })
 
-    # Save aggregate results
-    results_path = os.path.join(args.output_dir, "sweep_results.json")
-    with open(results_path, "w") as f:
-        json.dump(results, f, indent=2, default=str)
-    print(f"\nAll results saved to {results_path}")
+    # Merge with existing results and save
+    sweep_path = os.path.join(args.output_dir, "sweep_results.json")
+    if os.path.exists(sweep_path):
+        with open(sweep_path) as f:
+            existing = json.load(f)
+        existing_map = {(r["model"], r["difficulty"], r["seed"]): r for r in existing}
+        for r in new_results:
+            existing_map[(r["model"], r["difficulty"], r["seed"])] = r
+        all_results = sorted(existing_map.values(), key=lambda r: r["seed"])
+    else:
+        all_results = new_results
 
-    print_summary_table(results)
+    with open(sweep_path, "w") as f:
+        json.dump(all_results, f, indent=2, default=str)
+    print(f"\nAll results saved to {sweep_path}")
+
+    print_summary_table(all_results)
 
 
 if __name__ == "__main__":

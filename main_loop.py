@@ -1038,6 +1038,8 @@ Then give one sentence explaining the main source of your uncertainty.
             print(f"--- Turn {turn} ---")
 
         llm_text = backend.chat(full_system, messages)
+        if llm_text is None:
+            llm_text = "PREDICT:"
         if verbose:
             display = llm_text[:500] + ("..." if len(llm_text) > 500 else "")
             print(f"LLM: {display}\n")
@@ -1504,6 +1506,8 @@ def main():
                         help="Minimum queries before PREDICT is allowed")
     parser.add_argument("--output-dir", type=str, default=".",
                         help="Directory for JSON log and plot output (default: current dir)")
+    parser.add_argument("--no-plot", action="store_true",
+                        help="Skip generating dashboard PNG (JSON only)")
     args = parser.parse_args()
 
     if args.model is None:
@@ -1673,7 +1677,7 @@ def main():
         print(f"Transcript saved to {args.save_transcript}")
 
     # Generate results plot
-    if session.prediction_submitted and "prediction" in result:
+    if not args.no_plot and session.prediction_submitted and "prediction" in result:
         plot_path = args.save_plot
         if plot_path is None:
             plot_path = os.path.join(args.output_dir, run_stem + "_dashboard.png")
