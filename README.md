@@ -13,25 +13,24 @@ experimental strategy.
 # Install dependencies
 pip install numpy scipy matplotlib anthropic openai google-genai
 
-# Set your API key
+# Set your API keys
 export ANTHROPIC_API_KEY=your_key_here
-export OPENAI_API_KEY=your_key_here      # if using OpenAI models
-export GOOGLE_API_KEY=your_key_here      # if using Google models
+export OPENAI_API_KEY=your_key_here
+export GOOGLE_API_KEY=your_key_here
 
-# Run with Anthropic (default)
-python main_loop.py --difficulty hard --seed 42
+# Full paper benchmark (6 models × 3 difficulties × 10 seeds)
+python generate_transcripts.py \
+  --models gpt-5.4-mini gpt-5.4 gemini-3.1-pro-preview gemini-3-flash-preview claude-opus-4-6 claude-sonnet-4-20250514 \
+  --difficulties easy medium hard \
+  --seeds "1-10" \
+  --output-dir runs \
+  --no-plot
 
-# Run with OpenAI
-python main_loop.py --provider openai --model gpt-4o --difficulty hard --seed 42
-
-# Run with Google Gemini
+# Single run (one model, one seed)
 python main_loop.py --provider google --model gemini-3-flash-preview --difficulty hard --seed 42
 
 # Test with mock LLM (no API key needed)
 python main_loop.py --mock --difficulty easy
-
-# Ablation: minimal prompt without mathematical context
-python main_loop.py --difficulty hard --seed 42 --baseline
 ```
 
 Budget and turn limits are auto-scaled from difficulty — no manual tuning needed.
@@ -85,10 +84,10 @@ Budget and turn limits are derived automatically. Override with `--max-queries` 
 
 | Difficulty | Basis size | Unknowns | Auto budget | Auto turns |
 | --- | --- | --- | --- | --- |
-| `easy`    | 2 | 8 | 12 | 24 |
-| `medium`  | 3 | 12 | 18 | 36 |
-| `hard`    | 4 | 16 | 24 | 48 |
-| `extreme` | 8 | 32 | 48 | 96 |
+| `easy`    | 2 | 8 | 12 | 36 |
+| `medium`  | 3 | 12 | 18 | 54 |
+| `hard`    | 4 | 16 | 24 | 72 |
+| `extreme` | 8 | 32 | 48 | 144 |
 
 ---
 
@@ -131,33 +130,46 @@ Use `--output-dir runs/` to collect logs from multiple runs in one place.
 
 ## CLI Reference
 
+### `generate_transcripts.py` — batch sweep
+
 ```
+python generate_transcripts.py [options]
+
+  --models MODEL [MODEL ...]        Models to run (must be in MODELS registry)
+  --difficulties {easy,medium,hard,extreme} [...]
+  --seeds SEEDS                     Space-separated or range: "42 137" or "1-10"
+  --output-dir DIR                  Output directory (default: runs/)
+  --no-plot                         Skip PNG generation (JSON only)
+  --retry-failed                    Re-run only seeds missing from sweep_results.json
+  --temperature FLOAT               Sampling temperature (default: 0.0)
+  --reasoning-effort LEVEL          Override reasoning effort for OpenAI models
+```
+
+### `main_loop.py` — single run
+
+```text
 python main_loop.py [options]
 
 Core options:
   --difficulty {easy,medium,hard,extreme}   Problem difficulty (default: medium)
   --seed INT                                Random seed (default: 42)
   --provider {anthropic,openai,google}      LLM provider (default: anthropic)
-  --model MODEL                             Model name (default: claude-haiku-4-5-20251001
-                                            for anthropic, gpt-4o for openai,
-                                            gemini-3-flash-preview for google)
+  --model MODEL                             Model name
+  --temperature FLOAT                       Sampling temperature (default: 0.0)
 
 Budget overrides (auto-scaled by default):
   --max-queries INT                         Query budget
-  --max-turns INT                           Max conversation turns
+  --max-turns INT                           Max conversation turns (default: 3× budget)
   --min-queries INT                         Min queries before PREDICT is allowed
 
 Output:
   --output-dir DIR                          Directory for JSON and PNG output (default: .)
   --save-transcript FILE                    Also save full transcript as plain text
-  --save-plot FILE                          Override dashboard plot path
-
-Prompt:
-  --baseline                                Minimal prompt, no mathematical context
-                                            (default: standard prompt with ill-conditioning hint)
+  --no-plot                                 Skip PNG generation
 
 Testing:
   --mock                                    Use scripted mock LLM (no API key needed)
+  --baseline                                Minimal prompt (no mathematical context)
 ```
 
 ---

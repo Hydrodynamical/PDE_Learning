@@ -47,13 +47,13 @@ def overlay_actions(ax, d, x_is_turns=False):
         elif "predict" in actions:
             act = "predict"
         elif "compute" in actions:
-            if "solve" in content and "eval" not in content:
+            if "compute: solve" in content:
                 act = "solve"
-            elif "check" in content or "verify" in content:
+            elif "compute: check" in content or "compute: verify" in content:
                 act = "check"
-            elif "term_integral" in content:
+            elif "compute: term_integral" in content:
                 act = "term_integrals"
-            elif "eval_solution" in content:
+            elif "compute: eval_solution" in content:
                 act = "eval_solution"
             else:
                 continue
@@ -67,10 +67,12 @@ def overlay_actions(ax, d, x_is_turns=False):
         if x_is_turns:
             x_pos = turn_num
         else:
-            qcount = 0
+            qcount = None
             for q in d.get("queries", []):
                 if q["turn"] <= turn_num:
                     qcount = q["query_number"]
+            if qcount is None:
+                continue  # action before any query — no x position to anchor to
             x_pos = qcount
 
         ax.axvspan(x_pos - 0.4, x_pos + 0.4, alpha=0.12, color=color, zorder=0)
@@ -215,37 +217,72 @@ def plot_metrics(d, save_path=None):
                 transform=ax.transAxes, fontsize=7, color="gray",
                 fontstyle="italic")
 
-    # ── Panel 2: Confidence calibration + control efficiency ──
+    # ── Panel 2: Behavioral scorecard ──
     ax = axes[0, 1]
-    cr = mc.get("confidence_reports", [])
-    ctrl = mc.get("control", [])
+    ax.axis("off")
 
-    if cr:
-        qcounts = [c["query_count"] for c in cr]
-        for coeff in ["a", "b", "c", "f"]:
-            vals = [c[coeff] * 100 for c in cr]
-            ax.plot(qcounts, vals, "o-", color=COLORS[coeff],
-                    label=f"{coeff} confidence", markersize=3, linewidth=1, alpha=0.8)
-        ax.set_ylabel("Stated confidence (%)", fontsize=9)
-        ax.set_xlabel("Queries")
-        ax.set_ylim(-5, 105)
-        ax.legend(fontsize=7, loc="upper left")
-        ax.set_title("Confidence reports", fontsize=10)
-        ax.grid(True, alpha=0.2)
-        overlay_actions(ax, d)
+    n_unknowns = cfg.get("unknowns", 32)
+    budget = cfg.get("max_queries", 48)
+    queries_used = bm.get("queries_used", 0)
 
-        if ctrl:
-            # Show target coefficient as colored dots along bottom
-            ctrl_k = [c["k"] for c in ctrl]
-            targets = [c["j_star"] for c in ctrl]
-            target_colors = [COLORS.get(t, "gray") for t in targets]
-            ax.scatter(ctrl_k, [5] * len(ctrl_k), c=target_colors, s=20,
-                       marker="s", edgecolors="none", alpha=0.8, zorder=5)
-            ax.text(min(ctrl_k), 8, "target →", fontsize=6, color="gray")
+    # Timing
+    if solves:
+        first_solve_eqs = solves[0].get("queries_at_solve") or solves[0]["n_equations"]
+        timing = first_solve_eqs / n_unknowns
     else:
-        ax.text(0.5, 0.5, "No confidence data", transform=ax.transAxes,
-                ha="center", va="center", fontsize=11, color="gray")
-        ax.set_title("Confidence reports", fontsize=10)
+        timing = float('nan')
+
+    # Efficiency
+    blocks = bm.get("query_space_blocks", {})
+    ranks = [blocks.get(b, {}).get("effective_rank", 0) for b in ["diffusion", "advection", "reaction"]]
+    max_rank = blocks.get("diffusion", {}).get("max_rank", n_unknowns // 4)
+    efficiency = sum(ranks) / (3 * max_rank) if max_rank > 0 else 0
+
+    # Coefficient errors
+    res_errs = d["results"]["coefficient_errors"]
+
+    def get_coeff_err(k):
+        e = res_errs.get(k)
+        if e is None and solves:
+            e = solves[-1]["coeff_errors"].get(k)
+        return e or 0
+
+    def bm_val(key):
+        v = bm.get(key, 0)
+        return v if v is not None else 0
+
+    sc_lines = []
+    sc_lines.append(f"{'SCORECARD':^44}")
+    sc_lines.append(f"{'─' * 44}")
+
+    sc_lines.append(f"  Total error               {get_coeff_err('total'):>10.6f}")
+    for k in ["a", "b", "c"]:
+        sc_lines.append(f"    {k}(x)                  {get_coeff_err(k):>10.6f}")
+    sc_lines.append("")
+
+    timing_str = f"{timing:>10.2f}" if not (timing != timing) else "       n/a"
+    sc_lines.append(f"  Timing (1st solve/N)    {timing_str}")
+    sc_lines.append(f"  Efficiency (rank/3N)    {efficiency:>10.2f}")
+    sc_lines.append(f"  Budget used             {queries_used / budget:>10.0%}")
+    sc_lines.append("")
+
+    sc_lines.append(f"  Improvement ratio       {bm_val('improvement_ratio'):>10.1f}×")
+    sc_lines.append(f"  Family entropy          {bm_val('family_entropy_normalized'):>10.2f}")
+    sc_lines.append(f"  Solves / run            {bm_val('solve_count'):>10.1f}")
+    sc_lines.append(f"  Checks / run            {bm_val('check_count'):>10.1f}")
+    sc_lines.append(f"  Term integrals / run    {bm_val('term_integral_count'):>10.1f}")
+    sc_lines.append(f"  Wasted turn %           {bm_val('wasted_turn_fraction'):>10.0%}")
+    sc_lines.append("")
+
+    total_err = get_coeff_err("total")
+    sc_lines.append(f"  Success (<0.01)         {'YES' if total_err < 0.01 else 'no':>12}")
+    sc_lines.append(f"  Failure (>0.1)          {'yes' if total_err > 0.1 else 'NO':>12}")
+
+    ax.text(0.05, 0.95, "\n".join(sc_lines), transform=ax.transAxes,
+            fontsize=9, verticalalignment="top", fontfamily="monospace",
+            bbox=dict(boxstyle="round,pad=0.5", facecolor="#f8f9fa",
+                      edgecolor="#dee2e6", alpha=0.9))
+    ax.set_title("Behavioral scorecard", fontsize=10)
 
     # ── Panel 3: Test function families ──
     ax = axes[1, 0]
@@ -262,18 +299,32 @@ def plot_metrics(d, save_path=None):
     ax.set_ylabel("Count")
     ax.tick_params(axis="x", rotation=30)
 
-    # ── Panel 4: Conditioning by block ──
+    # ── Panel 4: Conditioning over solves ──
     ax = axes[1, 1]
-    blocks = bm.get("query_space_blocks", {})
     block_names = ["diffusion", "advection", "reaction"]
     block_colors = [COLORS["a"], COLORS["b"], COLORS["c"]]
-    kappas = [blocks.get(b, {}).get("condition", 0) for b in block_names]
-    bars = ax.bar(block_names, kappas, color=block_colors, edgecolor="white", linewidth=0.5)
-    for bar, k in zip(bars, kappas):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
-                f"κ = {k:.1f}", ha="center", va="bottom", fontsize=9)
-    ax.set_title("Conditioning by block (higher = harder)", fontsize=10)
-    ax.set_ylabel("Condition number κ")
+    has_cond = any("block_conditioning" in s for s in solves)
+    if has_cond and len(solves) > 1:
+        solve_queries = [s.get("queries_at_solve") or s["n_equations"] for s in solves]
+        for name, color in zip(block_names, block_colors):
+            kappas = [s.get("block_conditioning", {}).get(name, 0) for s in solves]
+            ax.semilogy(solve_queries, kappas, "o-", color=color,
+                        linewidth=2, markersize=5, label=name)
+        ax.set_xlabel("Queries at solve")
+        ax.set_ylabel("Condition number κ")
+        ax.set_title("Conditioning over solves (lower = better)", fontsize=10)
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.15)
+        overlay_actions(ax, d)
+    else:
+        blocks = bm.get("query_space_blocks", {})
+        kappas = [blocks.get(b, {}).get("condition", 0) for b in block_names]
+        bars = ax.bar(block_names, kappas, color=block_colors, edgecolor="white", linewidth=0.5)
+        for bar, k in zip(bars, kappas):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
+                    f"κ = {k:.1f}", ha="center", va="bottom", fontsize=9)
+        ax.set_title("Conditioning by block (higher = harder)", fontsize=10)
+        ax.set_ylabel("Condition number κ")
 
     plt.tight_layout()
     if save_path:
@@ -354,8 +405,9 @@ def print_summary(d):
           f"Turns: {bm['total_turns']}  Solves: {bm['solve_count']}")
     print(f"  Checks: {bm['check_count']}  Term integrals: {bm['term_integral_count']}")
     print(f"  Wasted turns: {bm['wasted_turns']} ({bm['wasted_turn_fraction']*100:.0f}%)")
-    print(f"  Duplicates: {bm['duplicate_queries']}  "
-          f"Improvement: {bm['improvement_ratio']:.2f}×")
+    imp = bm.get('improvement_ratio')
+    imp_str = f"{imp:.2f}×" if imp is not None else "n/a"
+    print(f"  Duplicates: {bm['duplicate_queries']}  Improvement: {imp_str}")
 
     fc = bm.get("family_counts", {})
     total_q = sum(fc.values())
@@ -495,13 +547,13 @@ def plot_deep(d, save_path=None):
             elif "predict" in actions:
                 act = "predict"
             elif "compute" in actions:
-                if "solve" in content and "eval" not in content:
+                if "compute: solve" in content:
                     act = "solve"
-                elif "check" in content or "verify" in content:
+                elif "compute: check" in content or "compute: verify" in content:
                     act = "check"
-                elif "term_integral" in content:
+                elif "compute: term_integral" in content:
                     act = "term_integrals"
-                elif "eval_solution" in content:
+                elif "compute: eval_solution" in content:
                     act = "eval_solution"
                 else:
                     act = "reasoning"
@@ -579,116 +631,136 @@ def plot_multiseed(runs, save_path=None):
 
     # ── Panel 1: Error convergence overlay (top-left) ──
     ax = fig.add_subplot(gs[0, 0])
-    all_curves = {coeff: [] for coeff in ["a", "b", "c"]}
-    all_curves["total"] = []
-
-    for d in runs:
-        solves = d.get("solves", [])
-        if not solves:
-            continue
-        qcounts = [s.get("queries_at_solve") or s["n_equations"] for s in solves]
-        for coeff in ["a", "b", "c"]:
-            errs = [s["coeff_errors"][coeff] for s in solves]
-            all_curves[coeff].append((qcounts, errs))
-            ax.semilogy(qcounts, errs, "-", color=COLORS[coeff], alpha=0.2, linewidth=0.8)
-        totals = [s["coeff_errors"]["total"] for s in solves]
-        all_curves["total"].append((qcounts, totals))
-        ax.semilogy(qcounts, totals, "--", color="black", alpha=0.15, linewidth=0.8)
 
     budget = cfg.get("max_queries", 48)
     n_unknowns = cfg.get("unknowns", 32)
     common_q = np.arange(n_unknowns, budget + 1)
-    for coeff in ["a", "b", "c"]:
-        interp_errs = []
-        for qcounts, errs in all_curves[coeff]:
-            interp_errs.append(np.interp(common_q, qcounts, errs,
-                                         left=errs[0], right=errs[-1]))
-        if interp_errs:
-            ax.semilogy(common_q, np.median(interp_errs, axis=0), "-",
-                        color=COLORS[coeff], linewidth=2.5, label=f"{coeff}(x)")
 
-    interp_totals = []
-    for qcounts, errs in all_curves["total"]:
-        interp_totals.append(np.interp(common_q, qcounts, errs,
-                                       left=errs[0], right=errs[-1]))
-    if interp_totals:
-        ax.semilogy(common_q, np.median(interp_totals, axis=0), "--",
-                    color="black", linewidth=2.5, label="total")
+    all_interped = {coeff: [] for coeff in ["a", "b", "c"]}
+
+    for d_run in runs:
+        solves = d_run.get("solves", [])
+        if not solves:
+            continue
+        qcounts = [s.get("queries_at_solve") or s["n_equations"] for s in solves]
+
+        for coeff in ["a", "b", "c"]:
+            errs = [s["coeff_errors"][coeff] for s in solves]
+            # Extend: hold last value to budget end
+            extended_q = qcounts + [budget]
+            extended_e = errs + [errs[-1]]
+            # Plot thin per-seed line
+            ax.semilogy(extended_q, extended_e, "o-", color=COLORS[coeff],
+                        alpha=0.15, linewidth=0.8, markersize=2)
+            # Interpolate for median (left=NaN before first solve, right=last value to end)
+            interped = np.interp(common_q, extended_q, extended_e,
+                                 left=np.nan, right=errs[-1])
+            all_interped[coeff].append(interped)
+
+    # Plot median curves
+    for coeff in ["a", "b", "c"]:
+        if all_interped[coeff]:
+            median_err = np.nanmedian(all_interped[coeff], axis=0)
+            valid = np.sum(~np.isnan(all_interped[coeff]), axis=0)
+            median_err[valid < 2] = np.nan
+            ax.semilogy(common_q, median_err, "-", color=COLORS[coeff],
+                        linewidth=2.5, label=f"{coeff}(x)")
 
     ax.axhline(0.1, color="gray", linestyle=":", alpha=0.5)
-    for d in runs:
-        total = d["results"]["coefficient_errors"]["total"]
-        seed = d["config"]["seed"]
-        ax.annotate(f"s{seed}", xy=(budget + 0.5, total),
-                    fontsize=6, color="gray", alpha=0.6)
+    ax.legend(fontsize=8, ncol=3)
     ax.set_xlabel("Queries at solve")
     ax.set_ylabel("Coefficient error")
     ax.set_title("Error convergence (thin = per seed, thick = median)", fontsize=10)
-    ax.legend(fontsize=8, ncol=2)
     ax.grid(True, alpha=0.15)
 
-    # ── Panel 2: Behavioral fingerprint (top-right) ──
+    # ── Panel 2: Behavioral scorecard (top-right) ──
     ax = fig.add_subplot(gs[0, 1])
+    ax.axis("off")
 
-    metrics = [
-        ("budget_utilization", "Budget utilization", 1.0),
-        ("improvement_ratio", "Improvement ratio", None),
-        ("family_entropy_normalized", "Family entropy", 1.0),
-        ("solve_count", "Solves / run", None),
-        ("check_count", "Checks / run", None),
-        ("term_integral_count", "Term integrals / run", None),
-        ("wasted_turn_fraction", "Wasted turn %", 1.0),
-    ]
+    # Compute per-seed sub-scores
+    timing_scores = []
+    stopping_scores = []
 
-    y_pos = np.arange(len(metrics))
-    bar_colors = ["#3b82f6", "#10b981", "#f97316", "#16a34a", "#f59e0b", "#06b6d4", "#ef4444"]
+    for d_run in runs:
+        solves = d_run.get("solves", [])
+        bm_run = d_run.get("behavioral_metrics", {})
+        queries_used = bm_run.get("queries_used", 0)
 
-    for i, (key, label, max_val) in enumerate(metrics):
-        if key == "budget_utilization":
-            vals = [d.get("behavioral_metrics", {}).get(key,
-                    d.get("behavioral_metrics", {}).get("queries_used", 0) /
-                    d.get("config", {}).get("max_queries", 1))
-                    for d in runs]
+        # Timing: first solve / n_unknowns (1.0 = optimal)
+        if solves:
+            first_solve_eqs = solves[0].get("queries_at_solve") or solves[0]["n_equations"]
+            timing_scores.append(first_solve_eqs / n_unknowns)
         else:
-            vals = [d.get("behavioral_metrics", {}).get(key, 0) for d in runs]
+            timing_scores.append(float('nan'))
+
+        # Stopping: queries_used / budget
+        stopping_scores.append(queries_used / budget)
+
+    # Collect all metrics
+    scores_total = [d_run["results"]["coefficient_errors"]["total"] for d_run in runs]
+
+    def get_coeff_err(d_run, k):
+        e = d_run["results"]["coefficient_errors"].get(k)
+        if e is None and d_run.get("solves"):
+            e = d_run["solves"][-1]["coeff_errors"].get(k)
+        return e or 0
+
+    def med(vals):
+        clean = [v for v in vals if v is not None and not np.isnan(v)]
+        return np.median(clean) if clean else 0
+
+    def iqr(vals):
+        clean = [v for v in vals if v is not None and not np.isnan(v)]
+        if len(clean) < 2:
+            return ""
+        q1, q3 = np.percentile(clean, [25, 75])
+        return f"[{q1:.4f}–{q3:.4f}]"
+
+    # Build text lines
+    sc_lines = []
+    sc_lines.append(f"{'SCORECARD':^44}")
+    sc_lines.append(f"{'─' * 44}")
+
+    sc_lines.append(f"  Total error (median)    {med(scores_total):>10.6f}  {iqr(scores_total)}")
+    for k in ["a", "b", "c"]:
+        vals = [get_coeff_err(d_run, k) for d_run in runs]
+        sc_lines.append(f"    {k}(x)                  {med(vals):>10.6f}")
+    sc_lines.append("")
+
+    sc_lines.append(f"  Timing (1st solve/N)    {med(timing_scores):>10.2f}")
+    # Per-block conditioning (median κ)
+    kappa_vals = {}
+    for block in ["diffusion", "advection", "reaction"]:
+        vals = [d_run.get("behavioral_metrics", {}).get("query_space_blocks", {}).get(block, {}).get("condition", 0)
+                for d_run in runs]
+        kappa_vals[block] = med(vals)
+    sc_lines.append(f"  κ  diff / adv / react   {kappa_vals['diffusion']:>5.1f} / {kappa_vals['advection']:.1f} / {kappa_vals['reaction']:.1f}")
+    sc_lines.append(f"  Budget used             {med(stopping_scores):>10.0%}")
+    sc_lines.append("")
+
+    def bm_med(key):
+        vals = [d_run.get("behavioral_metrics", {}).get(key, 0) for d_run in runs]
         vals = [v if v is not None else 0 for v in vals]
-        med = np.median(vals)
+        return np.median(vals)
 
-        if max_val is not None:
-            bar_val = min(med / max_val, 1.0)
-        else:
-            scale = max(max(vals), 1)
-            bar_val = med / scale
+    sc_lines.append(f"  Improvement ratio       {bm_med('improvement_ratio'):>10.1f}×")
+    sc_lines.append(f"  Family entropy          {bm_med('family_entropy_normalized'):>10.2f}")
+    sc_lines.append(f"  Solves / run            {bm_med('solve_count'):>10.1f}")
+    sc_lines.append(f"  Checks / run            {bm_med('check_count'):>10.1f}")
+    sc_lines.append(f"  Term integrals / run    {bm_med('term_integral_count'):>10.1f}")
+    sc_lines.append(f"  Wasted turn %           {bm_med('wasted_turn_fraction'):>10.0%}")
+    sc_lines.append("")
 
-        ax.barh(i, bar_val, color=bar_colors[i % len(bar_colors)],
-                alpha=0.7, height=0.6, edgecolor="white", linewidth=0.5)
+    n_success = sum(1 for s in scores_total if s < 0.01)
+    n_fail = sum(1 for s in scores_total if s > 0.1)
+    sc_lines.append(f"  Success rate (<0.01)    {n_success:>5d}/{len(runs)}")
+    sc_lines.append(f"  Failure rate (>0.1)     {n_fail:>5d}/{len(runs)}")
 
-        if key in ("wasted_turn_fraction", "budget_utilization"):
-            val_text = f"{med:.0%}"
-        elif key == "family_entropy_normalized":
-            val_text = f"{med:.2f}"
-        elif key == "improvement_ratio":
-            val_text = f"{med:.1f}×"
-        else:
-            val_text = f"{med:.1f}"
-
-        ax.text(bar_val + 0.02, i, val_text, va="center", fontsize=9, fontweight="bold")
-
-        for v in vals:
-            if max_val is not None:
-                sv = min(v / max_val, 1.0)
-            else:
-                sv = v / scale if scale > 0 else 0
-            ax.plot(sv, i, "o", color=bar_colors[i % len(bar_colors)],
-                    alpha=0.3, markersize=4)
-
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels([m[1] for m in metrics], fontsize=9)
-    ax.set_xlim(0, 1.3)
-    ax.set_xticks([])
-    ax.invert_yaxis()
-    ax.set_title("Behavioral fingerprint (median + seeds)", fontsize=10)
-    ax.axvline(1.0, color="gray", linestyle=":", alpha=0.3)
+    ax.text(0.05, 0.95, "\n".join(sc_lines), transform=ax.transAxes,
+            fontsize=9, verticalalignment="top", fontfamily="monospace",
+            bbox=dict(boxstyle="round,pad=0.5", facecolor="#f8f9fa",
+                      edgecolor="#dee2e6", alpha=0.9))
+    ax.set_title("Behavioral scorecard (median across seeds)", fontsize=10)
 
     # ── Panel 3: Family bars (middle-left) ──
     ax = fig.add_subplot(gs[1, 0])
@@ -718,29 +790,54 @@ def plot_multiseed(runs, save_path=None):
     ax.set_title(f"Test function families (median entropy = {np.median(entropies):.2f})",
                  fontsize=10)
 
-    # ── Panel 4: Conditioning bars (middle-right) ──
+    # ── Panel 4: Conditioning over solves (middle-right) ──
     ax = fig.add_subplot(gs[1, 1])
     block_names = ["diffusion", "advection", "reaction"]
     block_colors = [COLORS["a"], COLORS["b"], COLORS["c"]]
-    per_seed_kappa = {b: [] for b in block_names}
-    for d in runs:
-        blocks = d.get("behavioral_metrics", {}).get("query_space_blocks", {})
-        for b in block_names:
-            per_seed_kappa[b].append(blocks.get(b, {}).get("condition", 0))
-    x_pos = np.arange(len(block_names))
-    medians = [np.median(per_seed_kappa[b]) for b in block_names]
-    ax.bar(x_pos, medians, color=block_colors, edgecolor="white", linewidth=0.5, alpha=0.8)
-    for b_idx, b in enumerate(block_names):
-        vals = per_seed_kappa[b]
-        jitter = rng.uniform(-0.15, 0.15, len(vals))
-        ax.scatter(b_idx + jitter, vals, color=block_colors[b_idx], s=15,
-                   alpha=0.5, edgecolors="none", zorder=5)
-        ax.text(b_idx, max(vals) + 0.5, f"κ={np.median(vals):.1f}",
-                ha="center", va="bottom", fontsize=9)
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(block_names, fontsize=9)
-    ax.set_ylabel("Condition number κ")
-    ax.set_title("Conditioning by block (higher = harder)", fontsize=10)
+    has_cond = any("block_conditioning" in s for d in runs for s in d.get("solves", []))
+    if has_cond:
+        for name, color in zip(block_names, block_colors):
+            all_kappa_curves = []
+            for d in runs:
+                solves = d.get("solves", [])
+                if not solves:
+                    continue
+                qcounts = [s.get("queries_at_solve") or s["n_equations"] for s in solves]
+                kappas = [s.get("block_conditioning", {}).get(name, 0) for s in solves]
+                if any(k > 0 for k in kappas):
+                    ax.semilogy(qcounts, kappas, "-", color=color, alpha=0.2, linewidth=0.8)
+                    all_kappa_curves.append((qcounts, kappas))
+            if all_kappa_curves:
+                common_q = np.arange(cfg.get("unknowns", 32), cfg.get("max_queries", 48) + 1)
+                interped = [np.interp(common_q, qc, kp, left=kp[0], right=kp[-1])
+                            for qc, kp in all_kappa_curves]
+                ax.semilogy(common_q, np.median(interped, axis=0), "-", color=color,
+                            linewidth=2.5, label=name)
+        ax.set_xlabel("Queries at solve")
+        ax.set_ylabel("Condition number κ")
+        ax.set_title("Conditioning over solves (lower = better)", fontsize=10)
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.15)
+    else:
+        per_seed_kappa = {b: [] for b in block_names}
+        for d in runs:
+            blocks = d.get("behavioral_metrics", {}).get("query_space_blocks", {})
+            for b in block_names:
+                per_seed_kappa[b].append(blocks.get(b, {}).get("condition", 0))
+        x_pos = np.arange(len(block_names))
+        medians = [np.median(per_seed_kappa[b]) for b in block_names]
+        ax.bar(x_pos, medians, color=block_colors, edgecolor="white", linewidth=0.5, alpha=0.8)
+        for b_idx, b in enumerate(block_names):
+            vals = per_seed_kappa[b]
+            jitter = rng.uniform(-0.15, 0.15, len(vals))
+            ax.scatter(b_idx + jitter, vals, color=block_colors[b_idx], s=15,
+                       alpha=0.5, edgecolors="none", zorder=5)
+            ax.text(b_idx, max(vals) + 0.5, f"κ={np.median(vals):.1f}",
+                    ha="center", va="bottom", fontsize=9)
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(block_names, fontsize=9)
+        ax.set_ylabel("Condition number κ")
+        ax.set_title("Conditioning by block (higher = harder)", fontsize=10)
 
     # ── Panel 5: Action timeline heatmap (bottom strip) ──
     ax_seq = fig.add_subplot(gs[2, :])
@@ -764,13 +861,13 @@ def plot_multiseed(runs, save_path=None):
             elif "predict" in actions:
                 act = "predict"
             elif "compute" in actions:
-                if "solve" in content and "eval" not in content:
+                if "compute: solve" in content:
                     act = "solve"
-                elif "check" in content or "verify" in content:
+                elif "compute: check" in content or "compute: verify" in content:
                     act = "check"
-                elif "term_integral" in content:
+                elif "compute: term_integral" in content:
                     act = "term_integrals"
-                elif "eval_solution" in content:
+                elif "compute: eval_solution" in content:
                     act = "eval_solution"
                 else:
                     act = "reasoning"

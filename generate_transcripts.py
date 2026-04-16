@@ -28,13 +28,13 @@ from main_loop import (
 # ── Model registry ──────────────────────────────────────────────────────────
 
 MODELS = {
-    "gpt-4o":         {"provider": "openai",     "reasoning_effort": None},
-    "gpt-5.4-mini":   {"provider": "openai",     "reasoning_effort": "medium"},
-    "gpt-5.4":        {"provider": "openai",     "reasoning_effort": "medium"},
-    "gemini-3.1-pro": {"provider": "google",     "reasoning_effort": None},
-    "gemini-3-flash-preview": {"provider": "google",     "reasoning_effort": None},
-    "opus-4.6":       {"provider": "anthropic",  "reasoning_effort": None},
-    "sonnet-4.6":     {"provider": "anthropic",  "reasoning_effort": None},
+    "gpt-4o":                    {"provider": "openai",    "reasoning_effort": None},
+    "gpt-5.4-mini":              {"provider": "openai",    "reasoning_effort": "medium"},
+    "gpt-5.4":                   {"provider": "openai",    "reasoning_effort": "medium"},
+    "gemini-3.1-pro-preview":    {"provider": "google",    "reasoning_effort": None},
+    "gemini-3-flash-preview":    {"provider": "google",    "reasoning_effort": None},
+    "claude-opus-4-6":           {"provider": "anthropic", "reasoning_effort": None},
+    "claude-sonnet-4-20250514":  {"provider": "anthropic", "reasoning_effort": None},
 }
 
 DEFAULT_MODELS = ["gpt-4o", "gpt-5.4-mini", "gpt-5.4"]
@@ -52,13 +52,13 @@ def parse_seeds(seed_str: str) -> list[int]:
     return [int(s) for s in seed_str.split()]
 
 
-def make_backend(model: str, provider: str, reasoning_effort: str = None):
+def make_backend(model: str, provider: str, reasoning_effort: str = None, temperature: float = 0.0):
     if provider == "openai":
-        return OpenAIBackend(model=model, reasoning_effort=reasoning_effort)
+        return OpenAIBackend(model=model, reasoning_effort=reasoning_effort, temperature=temperature)
     elif provider == "anthropic":
-        return AnthropicBackend(model=model)
+        return AnthropicBackend(model=model, temperature=temperature)
     elif provider == "google":
-        return GeminiBackend(model=model)
+        return GeminiBackend(model=model, temperature=temperature)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -67,15 +67,16 @@ def make_backend(model: str, provider: str, reasoning_effort: str = None):
 
 def run_single(model: str, provider: str, difficulty: str, seed: int,
                output_dir: str, baseline: bool = False,
-               reasoning_effort: str = None, no_plot: bool = False) -> dict:
+               reasoning_effort: str = None, no_plot: bool = False,
+               temperature: float = 0.0) -> dict:
     """Execute one benchmark run and save all outputs. Returns summary dict."""
 
     config = DIFFICULTY_CONFIG[difficulty]
     max_queries = config["budget"]
-    max_turns = 2 * max_queries
+    max_turns = 3 * max_queries
 
     session = ProbeSession.from_difficulty(difficulty, seed, max_queries)
-    backend = make_backend(model, provider, reasoning_effort=reasoning_effort)
+    backend = make_backend(model, provider, reasoning_effort=reasoning_effort, temperature=temperature)
 
     run_log = {
         "config": {
@@ -353,6 +354,8 @@ def main():
                         help="Skip generating dashboard PNG (JSON only)")
     parser.add_argument("--retry-failed", action="store_true",
                         help="Read sweep_results.json from output-dir, re-run only failed/missing seeds")
+    parser.add_argument("--temperature", type=float, default=0.0,
+                        help="LLM sampling temperature (0 = deterministic)")
     args = parser.parse_args()
 
     seeds = parse_seeds(args.seeds)
@@ -428,6 +431,7 @@ def main():
                 baseline=args.baseline,
                 reasoning_effort=reasoning_effort,
                 no_plot=args.no_plot,
+                temperature=args.temperature,
             )
             new_results.append(summary)
             elapsed = time.time() - t0

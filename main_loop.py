@@ -29,6 +29,7 @@ from basis import LegendreBasis
 from pde import EllipticPDE, EllipticSolution, solve_elliptic, make_random_elliptic_pde
 from weak_form import _composite_simpson
 from expression_parser import make_test_function_from_string
+from sanitize_expression import sanitize_expression
 from benchmark import score_prediction, ScoreResult, DIFFICULTY_CONFIGS, BenchmarkTask
 
 
@@ -115,8 +116,6 @@ class ProbeSession:
 
     def system_prompt(self) -> str:
         n_b = self.basis.n_basis
-        x_str = ", ".join(f"{v:.6f}" for v in self.solution_data["x"])
-        u_str = ", ".join(f"{v:.6f}" for v in self.solution_data["u"])
         return f"""You are a mathematician tasked with identifying an unknown elliptic PDE.
 
 The solution u(x) satisfies:
@@ -131,9 +130,8 @@ The weak form identity (integration by parts) gives:
 
 for any test function φ with φ(0) = φ(1) = 0.
 
-You have the solution data:
-x = [{x_str}]
-u = [{u_str}]
+The solution u(x) is not provided directly. Use COMPUTE: eval_solution to obtain
+u(x) and u'(x) at points of your choosing before querying.
 
 Available commands:
     QUERY: <expression>                              → returns ∫f·φ dx  (costs 1 from budget)
@@ -156,6 +154,9 @@ Available commands:
     PREDICT:                                         → end the session and submit your current
                                                        COMPUTE: solve coefficients as your answer.
                                                        (requires solve first)
+                                                       When you call PREDICT, you MUST include a
+                                                       final confidence report on the same turn:
+                                                       Confidence: a=XX%, b=XX%, c=XX%, f=XX%
 
 You have {self.max_queries} queries. Your score depends on both accuracy and efficiency.
 """
@@ -297,6 +298,17 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
             family = count_atoms(r.get("spec", ""))
             type_counts[family] += 1
 
+        def block_condition(M):
+            sv = np.linalg.svd(M, compute_uv=False)
+            sv = sv[sv > 1e-14]
+            return float(sv[0] / sv[-1]) if len(sv) > 1 else 1.0
+
+        block_conditioning = {
+            "diffusion": block_condition(G_diff),
+            "advection":  block_condition(G_adv),
+            "reaction":   block_condition(G_react),
+        }
+
         return {
             "status": "ok",
             "type": "solve",
@@ -307,6 +319,7 @@ You have {self.max_queries} queries. Your score depends on both accuracy and eff
             "c_coeffs": [round(v, 8) for v in c_coeffs],
             "f_coeffs": [round(v, 8) for v in f_coeffs],
             "type_counts": type_counts,
+            "block_conditioning": block_conditioning,
         }
 
     def verify(self, spec: str) -> dict:
@@ -436,7 +449,9 @@ def parse_probe_response(text: str) -> list[dict]:
         line = lines[i].strip()
         m = re.match(r'^QUERY:\s*(.+)$', line, re.IGNORECASE)
         if m:
-            actions.append({"action": "query", "spec": m.group(1).strip().strip('"\'`')})
+            spec = m.group(1).strip().strip('"\'`')
+            spec = sanitize_expression(spec)
+            actions.append({"action": "query", "spec": spec})
             i += 1
             continue
         m = re.match(r'^COMPUTE:\s*(.+)$', line, re.IGNORECASE)
@@ -559,7 +574,8 @@ def _compute_stability(solves: list) -> dict | None:
 class AnthropicBackend:
     """Calls the Anthropic API."""
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514", max_tokens: int = 4096):
+    def __init__(self, model: str = "claude-sonnet-4-20250514", max_tokens: int = 4096,
+                 temperature: float = 0.0):
         try:
             import anthropic
         except ImportError:
@@ -570,6 +586,7 @@ class AnthropicBackend:
         self.client = anthropic.Anthropic()
         self.model = model
         self.max_tokens = max_tokens
+        self.temperature = temperature
 
     def chat(self, system: str, messages: list[dict]) -> str:
         response = self.client.messages.create(
@@ -577,6 +594,7 @@ class AnthropicBackend:
             max_tokens=self.max_tokens,
             system=system,
             messages=messages,
+            temperature=self.temperature,
         )
         return response.content[0].text
 
@@ -585,7 +603,7 @@ class OpenAIBackend:
     """Calls the OpenAI API."""
 
     def __init__(self, model: str = "gpt-4o", max_tokens: int = 4096,
-                 reasoning_effort: str = None):
+                 reasoning_effort: str = None, temperature: float = 0.0):
         try:
             import openai
         except ImportError:
@@ -597,6 +615,8 @@ class OpenAIBackend:
         self.model = model
         self.max_tokens = max_tokens
         self.reasoning_effort = reasoning_effort
+        self.temperature = temperature
+        self.is_reasoning_model = reasoning_effort is not None
 
     def chat(self, system: str, messages: list[dict]) -> str:
         import openai as _openai
@@ -610,6 +630,8 @@ class OpenAIBackend:
                 )
                 if self.reasoning_effort is not None:
                     kwargs["reasoning_effort"] = self.reasoning_effort
+                if self.temperature is not None and not self.is_reasoning_model:
+                    kwargs["temperature"] = self.temperature
                 response = self.client.chat.completions.create(**kwargs)
                 return response.choices[0].message.content
             except _openai.RateLimitError:
@@ -623,7 +645,8 @@ class OpenAIBackend:
 class GeminiBackend:
     """Calls the Google Gemini API."""
 
-    def __init__(self, model: str = "gemini-3-flash-preview", max_tokens: int = 4096):
+    def __init__(self, model: str = "gemini-3-flash-preview", max_tokens: int = 4096,
+                 temperature: float = 0.0):
         try:
             from google import genai
         except ImportError:
@@ -634,6 +657,7 @@ class GeminiBackend:
         self.client = genai.Client()
         self.model = model
         self.max_tokens = max_tokens
+        self.temperature = temperature
 
     def chat(self, system: str, messages: list[dict]) -> str:
         from google import genai  # noqa: F401
@@ -655,6 +679,7 @@ class GeminiBackend:
                     config=types.GenerateContentConfig(
                         system_instruction=system,
                         max_output_tokens=self.max_tokens,
+                        temperature=self.temperature,
                     ),
                 )
                 return response.text
@@ -851,6 +876,7 @@ def dispatch_turn(session: ProbeSession, llm_text: str, actions: list[dict],
                         "coeff_errors": {"a": a_err, "b": b_err, "c": c_err, "f": f_err,
                                          "total": a_err + b_err + c_err + f_err},
                         "test_function_taxonomy": resp.get("type_counts", {}),
+                        "block_conditioning": resp.get("block_conditioning", {}),
                         "timestamp": time.time(),
                     }
                     run_log["solves"].append(solve_entry)
@@ -1038,13 +1064,13 @@ Then give one sentence explaining the main source of your uncertainty.
             print(f"--- Turn {turn} ---")
 
         llm_text = backend.chat(full_system, messages)
-        if llm_text is None:
+        if not llm_text or not llm_text.strip():
             llm_text = "PREDICT:"
         if verbose:
             display = llm_text[:500] + ("..." if len(llm_text) > 500 else "")
             print(f"LLM: {display}\n")
 
-        messages.append({"role": "assistant", "content": llm_text})
+        messages.append({"role": "assistant", "content": re.sub(r'[^\x00-\x7E]+', '', llm_text)})
         actions = parse_probe_response(llm_text)
 
         if run_log is not None:
@@ -1135,7 +1161,14 @@ def compute_metacognitive_metrics(session: ProbeSession,
     Compute monitoring accuracy, control efficiency, and calibration
     at each query step from stored G matrices.
     """
-    from scipy.stats import spearmanr
+    def spearmanr(a, b):
+        """Spearman rank correlation for small arrays (no scipy needed)."""
+        a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+        rank_a = np.argsort(np.argsort(a)).astype(float)
+        rank_b = np.argsort(np.argsort(b)).astype(float)
+        if np.std(rank_a) == 0 or np.std(rank_b) == 0:
+            return float('nan'), 1.0
+        return float(np.corrcoef(rank_a, rank_b)[0, 1]), 0.0
 
     n_b = session.basis.n_basis
     rows = [r for r in session.history if "_G_diff" in r]
@@ -1212,11 +1245,11 @@ def compute_metacognitive_metrics(session: ProbeSession,
             rho, _ = spearmanr(true_uncertainty, stated_uncertainty)
         else:
             rho = float('nan')
-            monitoring.append({
-                "k": k, "M_k": rho,
-                "true": true_uncertainty,
-                "stated": stated_uncertainty
-            })
+        monitoring.append({
+            "k": k, "M_k": rho,
+            "true": true_uncertainty,
+            "stated": stated_uncertainty
+        })
 
     return {
         "sigma_curves": sigma_curves,
@@ -1508,6 +1541,8 @@ def main():
                         help="Directory for JSON log and plot output (default: current dir)")
     parser.add_argument("--no-plot", action="store_true",
                         help="Skip generating dashboard PNG (JSON only)")
+    parser.add_argument("--temperature", type=float, default=0.0,
+                        help="LLM sampling temperature (0 = deterministic)")
     args = parser.parse_args()
 
     if args.model is None:
@@ -1517,7 +1552,7 @@ def main():
 
     config = DIFFICULTY_CONFIG[args.difficulty]
     max_queries = args.max_queries if args.max_queries is not None else config["budget"]
-    max_turns = args.max_turns if args.max_turns is not None else 2 * max_queries
+    max_turns = args.max_turns if args.max_turns is not None else 3 * max_queries
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -1525,11 +1560,12 @@ def main():
     if args.mock:
         backend = MockBackend()
     elif args.provider == "openai":
-        backend = OpenAIBackend(model=args.model, reasoning_effort=args.reasoning_effort)
+        backend = OpenAIBackend(model=args.model, reasoning_effort=args.reasoning_effort,
+                                temperature=args.temperature)
     elif args.provider == "google":
-        backend = GeminiBackend(model=args.model)
+        backend = GeminiBackend(model=args.model, temperature=args.temperature)
     else:
-        backend = AnthropicBackend(model=args.model)
+        backend = AnthropicBackend(model=args.model, temperature=args.temperature)
 
     run_log = {
         "config": {

@@ -262,13 +262,12 @@ def solve_elliptic(pde: EllipticPDE, n_grid: int = 201) -> EllipticSolution:
         if idx == N - 2:
             rhs[i] -= coeff_right * pde.bc_right
 
-    # Solve tridiagonal system
-    from scipy.linalg import solve_banded
-    ab = np.zeros((3, n_interior))
-    ab[0, 1:] = diag_upper
-    ab[1, :] = diag_main
-    ab[2, :-1] = diag_lower
-    u_interior = solve_banded((1, 1), ab, rhs)
+    # Solve tridiagonal system (Thomas algorithm via numpy)
+    A = np.zeros((n_interior, n_interior))
+    np.fill_diagonal(A, diag_main)
+    np.fill_diagonal(A[:-1, 1:], diag_upper)
+    np.fill_diagonal(A[1:, :-1], diag_lower)
+    u_interior = np.linalg.solve(A, rhs)
 
     # Assemble full solution
     u = np.zeros(N)
