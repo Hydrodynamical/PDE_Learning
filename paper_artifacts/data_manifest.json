@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "dataset_ref": "jkmiller/elliptic-differential-equation-llm-reasoning",
+  "dataset_title": "Elliptic Differential Equation LLM Reasoning",
+  "dataset_version": 1,
+  "dataset_published_utc": "2026-04-16T19:44:06.873Z",
+  "dataset_url": "https://www.kaggle.com/datasets/jkmiller/elliptic-differential-equation-llm-reasoning/versions/1",
+  "download_url": "https://www.kaggle.com/api/v1/datasets/download/jkmiller/elliptic-differential-equation-llm-reasoning?datasetVersionNumber=1",
+  "archive_sha256": "b2f50742cc76acae4a6a8d7b04d434e7735acf107d57f08f499e1dfcf05ce66f",
+  "archive_bytes": 1461201,
+  "archive_members": 181,
+  "expected_runs": 180,
+  "expected_scored_runs": 180,
+  "expected_seeds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "models": [
+    "gemini-3.1-pro-preview",
+    "claude-opus-4-6",
+    "gpt-5.4",
+    "gemini-3-flash-preview",
+    "claude-sonnet-4-20250514",
+    "gpt-5.4-mini"
+  ],
+  "difficulty_settings": {
+    "easy": {"n_basis": 2, "unknowns": 8, "max_queries": 12, "max_turns": 36},
+    "medium": {"n_basis": 3, "unknowns": 12, "max_queries": 18, "max_turns": 54},
+    "hard": {"n_basis": 4, "unknowns": 16, "max_queries": 24, "max_turns": 72}
+  },
+  "prompt_condition": "standard",
+  "publication_url": "https://www.kaggle.com/competitions/kaggle-measuring-agi/writeups/can-language-models-learn-a-pde#3442067",
+  "implementation_snapshot": {
+    "dataset_ref": "jkmiller/pde-library",
+    "dataset_version": 9,
+    "published_utc": "2026-04-15T20:31:32.35Z",
+    "url": "https://www.kaggle.com/datasets/jkmiller/pde-library/versions/9",
+    "archive_sha256": "0aff72715241e3fc8144cbf0fe9a55c8e700f6368a7400437a4d89b05850e0c3",
+    "limitation": "This published snapshot postdates most runs; individual logs do not pin implementation versions."
+  },
+  "limitations": [
+    "The archive records 180 scored runs, not a complete history of failed attempts or retries.",
+    "The archive stores the condition name standard; the writeup describes the augmented instructions as enhanced.",
+    "Kaggle metadata reports the dataset license as Unknown.",
+    "These data do not recover the preliminary 18-attempt table in the earlier manuscript."
+  ]
+}
