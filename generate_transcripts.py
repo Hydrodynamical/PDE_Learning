@@ -14,6 +14,7 @@ import argparse
 import time
 import json
 import os
+from uuid import uuid4
 import numpy as np
 
 from main_loop import (
@@ -41,8 +42,20 @@ DEFAULT_MODELS = ["gpt-4o", "gpt-5.4-mini", "gpt-5.4"]
 DEFAULT_DIFFICULTIES = ["easy", "medium", "hard"]
 DEFAULT_SEEDS = [42, 137]
 
+# Legacy summaries did not record every setting. Keep them distinguishable from
+# explicitly configured runs rather than guessing which experiment they belong to.
+_UNSPECIFIED = object()
+_RUN_KEY_FIELDS = (
+    "model", "difficulty", "seed", "prompt_condition", "temperature", "reasoning_effort",
+)
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def run_key(record: dict) -> tuple:
+    """Identify an experiment without conflating prompt or sampling settings."""
+    return tuple(record.get(field, _UNSPECIFIED) for field in _RUN_KEY_FIELDS)
+
 
 def parse_seeds(seed_str: str) -> list[int]:
     """Parse '42-46' or '42 43 44' into a list of ints."""
@@ -91,6 +104,7 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
             "budget_source": "auto",
             "prompt_condition": "baseline" if baseline else "standard",
             "reasoning_effort": reasoning_effort,
+            "temperature": temperature,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         },
         "turns": [],
@@ -209,7 +223,10 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
 
     # ── Save files ──
     model_slug = model.replace("/", "_").replace(".", "_")
-    stem = f"run_{difficulty}_s{seed}_{model_slug}_{time.strftime('%Y%m%d_%H%M%S')}"
+    # Prompt/settings can differ even when model, PDE seed and wall-clock second
+    # match. Never let one run replace another run's raw log or plots.
+    stem = (f"run_{difficulty}_s{seed}_{model_slug}_"
+            f"{time.strftime('%Y%m%d_%H%M%S')}_{uuid4().hex}")
 
     log_path = os.path.join(output_dir, stem + ".json")
     with open(log_path, "w") as f:
@@ -248,6 +265,8 @@ def run_single(model: str, provider: str, difficulty: str, seed: int,
         "difficulty": difficulty,
         "seed": seed,
         "reasoning_effort": reasoning_effort,
+        "prompt_condition": "baseline" if baseline else "standard",
+        "temperature": temperature,
         "queries_used": result["queries_used"],
         "max_queries": max_queries,
         "turns": result["turns"],
@@ -346,7 +365,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default="runs",
                         help="Output directory (default: runs/)")
     parser.add_argument("--baseline", action="store_true",
-                        help="Use baseline prompt (no mathematical context)")
+                        help="Omit the initial identifiability hint (shared PDE/tool instructions remain)")
     parser.add_argument("--reasoning-effort", type=str, default=None,
                         choices=["none", "low", "medium", "high", "xhigh"],
                         help="Override reasoning effort for all OpenAI models")
@@ -355,7 +374,7 @@ def main():
     parser.add_argument("--retry-failed", action="store_true",
                         help="Read sweep_results.json from output-dir, re-run only failed/missing seeds")
     parser.add_argument("--temperature", type=float, default=0.0,
-                        help="LLM sampling temperature (0 = deterministic)")
+                        help="Requested LLM sampling temperature (default: 0; API outputs can vary)")
     args = parser.parse_args()
 
     seeds = parse_seeds(args.seeds)
@@ -371,6 +390,8 @@ def main():
             }
         elif "claude" in m or "anthropic" in m.lower():
             model_configs[m] = {"provider": "anthropic", "reasoning_effort": None}
+        elif "gemini" in m.lower():
+            model_configs[m] = {"provider": "google", "reasoning_effort": None}
         else:
             model_configs[m] = {"provider": "openai", "reasoning_effort": args.reasoning_effort}
 
@@ -381,6 +402,16 @@ def main():
         for seed in seeds
     ]
 
+    def requested_key(model, difficulty, seed):
+        return run_key({
+            "model": model,
+            "difficulty": difficulty,
+            "seed": seed,
+            "prompt_condition": "baseline" if args.baseline else "standard",
+            "temperature": args.temperature,
+            "reasoning_effort": model_configs[model]["reasoning_effort"],
+        })
+
     if args.retry_failed:
         sweep_path = os.path.join(args.output_dir, "sweep_results.json")
         if os.path.exists(sweep_path):
@@ -389,9 +420,12 @@ def main():
             done = set()
             for r in existing:
                 if "error" not in r and r.get("total_coeff_error") is not None:
-                    done.add((r["model"], r["difficulty"], r["seed"]))
-            all_combos = [(m, d, s) for m, d, s in all_combos if (m, d, s) not in done]
-            print(f"Retrying {len(all_combos)} failed/missing seeds ({len(done)} already succeeded)")
+                    done.add(run_key(r))
+            requested_count = len(all_combos)
+            all_combos = [(m, d, s) for m, d, s in all_combos
+                          if requested_key(m, d, s) not in done]
+            print(f"Retrying {len(all_combos)} failed/missing runs "
+                  f"({requested_count - len(all_combos)} matching runs already succeeded)")
         else:
             print(f"No sweep_results.json found in {args.output_dir}, running all")
 
@@ -445,6 +479,8 @@ def main():
                 "model": model, "provider": provider,
                 "difficulty": difficulty, "seed": seed,
                 "reasoning_effort": reasoning_effort,
+                "prompt_condition": "baseline" if args.baseline else "standard",
+                "temperature": args.temperature,
                 "error": str(e),
             })
 
@@ -453,9 +489,9 @@ def main():
     if os.path.exists(sweep_path):
         with open(sweep_path) as f:
             existing = json.load(f)
-        existing_map = {(r["model"], r["difficulty"], r["seed"]): r for r in existing}
+        existing_map = {run_key(r): r for r in existing}
         for r in new_results:
-            existing_map[(r["model"], r["difficulty"], r["seed"])] = r
+            existing_map[run_key(r)] = r
         all_results = sorted(existing_map.values(), key=lambda r: r["seed"])
     else:
         all_results = new_results

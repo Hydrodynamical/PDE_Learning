@@ -33,14 +33,17 @@ al.\ cognitive taxonomy: mathematical reasoning, metacognitive monitoring,
 metacognitive control, executive planning, cognitive flexibility,
 in-context learning, attention, and goal maintenance.  Each
 faculty is measured by a dedicated, mathematically grounded metric with
-computable ground truth.  Across three OpenAI models (GPT-4o, GPT-5.4-mini,
-GPT-5.4) and three difficulty levels, we find a clear capability hierarchy:
-GPT-5.4 achieves near-perfect coefficient recovery at medium difficulty
-(error $< 10^{-4}$) while GPT-4o fails at basic tool use on hard problems.
+computable ground truth.  A preliminary reported comparison covers three
+OpenAI models (GPT-4o, GPT-5.4-mini, GPT-5.4), three difficulty levels,
+and two seeds per configuration.  In that comparison, GPT-5.4 achieves
+total coefficient error below $0.002$ on both medium-difficulty instances,
+while GPT-4o fails to produce a scored run on the two hard instances.
 The benchmark reveals distinct behavioral failure modes---test function
 homogeneity, premature termination, and over-reliance on consistency
-checks---that map onto specific cognitive deficits.  All code, logs, and
-data are publicly available.
+checks---that map onto specific cognitive deficits.  These observations
+are exploratory.  The implementation and selected notebook outputs are
+publicly available; the underlying run-log archive for the manuscript's
+tables is not included in the repository.
 \end{abstract}
 
 %----------------------------------------------------------------------
@@ -130,10 +133,10 @@ dimensionality of the inverse problem and the query budget:
 \toprule
 \textbf{Difficulty} & $N$ & \textbf{Unknowns} & \textbf{Budget} & \textbf{Turn limit} \\
 \midrule
-Easy    & 2 &  8 & 12 & 24 \\
-Medium  & 3 & 12 & 18 & 36 \\
-Hard    & 4 & 16 & 24 & 48 \\
-Extreme & 8 & 32 & 48 & 96 \\
+Easy    & 2 &  8 & 12 & 36 \\
+Medium  & 3 & 12 & 18 & 54 \\
+Hard    & 4 & 16 & 24 & 72 \\
+Extreme & 8 & 32 & 48 & 144 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -141,7 +144,9 @@ Extreme & 8 & 32 & 48 & 96 \\
 \noindent The budget is set to $1.5\times$ the number of unknowns,
 providing enough headroom for the model to solve the system, diagnose
 problems, and iterate---but not so much that brute-force data collection
-suffices.  The turn limit is $2\times$ the budget.
+suffices.  These are the current runner's defaults: its turn limit is
+$3\times$ the budget.  Historical results must be compared using their
+recorded run settings, which are not recoverable from the tables alone.
 
 \subsection{Tools Available to the Model}
 
@@ -455,7 +460,9 @@ specifically goal setting and maintenance (\S7.8.1).
 
 \subsection{Models}
 
-We evaluate six models spanning three providers and two capability tiers:
+The preliminary comparison reported in Table~\ref{tab:sweep} covers
+GPT-4o, GPT-5.4-mini, and GPT-5.4.  An expanded comparison is proposed
+across six models spanning three providers and two capability tiers:
 
 \begin{center}
 \small
@@ -463,37 +470,49 @@ We evaluate six models spanning three providers and two capability tiers:
 \toprule
 \textbf{Provider} & \textbf{Large} & \textbf{Small} \\
 \midrule
-Anthropic & Claude Opus 4.6    & Claude Sonnet 4.6 \\
+Anthropic & Claude Opus 4.6    & Claude Sonnet 4 (2025-05-14) \\
 OpenAI    & GPT-5.4            & GPT-5.4-mini \\
 Google    & Gemini 3.1 Pro     & Gemini 3 Flash \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\noindent All models are accessed through the same benchmark infrastructure,
-ensuring identical tool interfaces, system prompts, and parsing logic across
-providers.  OpenAI models use \texttt{reasoning\_effort: medium} (see
-Limitations).  All models use the standard prompt with mathematical context.
+\noindent Provider backends share tool interfaces, prompt construction,
+and parsing logic.  The proposed model names reflect the
+runner's model registry; this is distinct from the three-model table.  The draft
+reports \texttt{reasoning\_effort: medium} for GPT-5.4 and GPT-5.4-mini;
+GPT-4o has no reasoning-effort override in the registry.  The preliminary
+comparison uses the standard prompt with mathematical context.
 
 \subsection{Protocol}
 
-Each model is evaluated at three difficulty levels (easy, medium, hard)
-across five random seeds, with and without the mathematical context prompt
-(baseline ablation), for a total of $6 \times 3 \times 5 \times 2 = 180$
-runs.  Budgets and turn limits are auto-scaled from difficulty.  Each run
+The preliminary table reports $3 \times 3 \times 2 = 18$ attempted runs:
+three models at three difficulty levels (easy, medium, hard), using seeds
+42 and 137.  Fifteen attempts have reported scores and three have no
+score.  This matches the batch runner's default model, difficulty, and
+seed selection; it is not evidence that the table has been regenerated
+with the current code.
+
+The proposed expanded study would evaluate six models across five seeds,
+with and without the mathematical context prompt (baseline ablation), for
+a total of $6 \times 3 \times 5 \times 2 = 180$ runs.  This expanded sweep
+is not reported as completed here.  The runner selects one prompt condition
+per invocation via \texttt{--baseline}; both conditions require separate
+invocations.  Budgets and turn limits are auto-scaled from difficulty.  Each run
 produces a JSON log containing: the full turn-by-turn transcript, every
 query and its result, every solve with coefficient errors against ground
 truth, every consistency check, every term integral call, the post-hoc
 efficiency curve (error at each query count), and the metacognitive metrics
 ($\sigma$-curves, monitoring reports, control efficiency).
 
-The benchmark is available as a Kaggle Community Benchmark.  The
-\texttt{kaggle.py} adapter wraps the core benchmark loop using the
-\texttt{kaggle-benchmarks} SDK, importing \texttt{dispatch\_turn()} from
-the main benchmark code to ensure identical tool dispatch logic across the
-command-line and notebook interfaces.  The full sweep costs approximately
-\$25 at standard API pricing (calibrated from Opus 4.6 runs at \$0.85/run),
-making reproduction accessible.
+Kaggle integration is provided in \texttt{kaggle-benchmark.ipynb} and
+\texttt{kaggle.ipynb}, using the \texttt{kaggle-benchmarks} SDK and importing
+\texttt{dispatch\_turn()} from the main benchmark code.  Saved notebook
+outputs document additional exploratory runs; they are separate from the
+18-attempt table and do not establish completion of the proposed study.
+The original draft estimated approximately \$25 for the expanded sweep
+(calibrated from Opus 4.6 runs at \$0.85/run); this estimate has not been
+revalidated and actual cost depends on the selected models and usage.
 
 %----------------------------------------------------------------------
 \section{Results}
@@ -502,14 +521,27 @@ making reproduction accessible.
 
 \subsection{Cross-Model Comparison}
 
-Table~\ref{tab:sweep} shows the primary results.  The identifiability
+\paragraph{Evidence status.}
+The tables below retain the historical values reported in this draft.
+The repository does not include their underlying per-run JSON logs or
+sweep summaries, so these values and aggregates cannot be recomputed from
+the checkout alone.  The checked-in figures likewise do not include a
+complete source-run archive.  In particular, the checked-in success-rate
+figures label 180 scored runs across six models, with ten runs per
+model--difficulty combination.  That aggregate has a different design
+from the proposed five-seed, two-prompt study above.  Saved Kaggle notebook
+outputs provide additional exploratory evidence under their own recorded settings.
+No numerical results have been regenerated for this revision.
+
+Table~\ref{tab:sweep} shows the preliminary reported results.  The identifiability
 hierarchy $f \gg a > b > c$ holds across all models and difficulties:
 $f$ is recovered to machine precision, $a$ is consistently accurate, and
 $c$ is the limiting factor.
 
 \begin{table}[h]
 \centering
-\caption{Coefficient error across models and difficulty levels (2 seeds each).
+\caption{Historical reported coefficient error across three models and three
+difficulty levels (2 seeds each; 18 attempts, 15 scored).
 ``---'' indicates the model failed to produce a scored run.}\label{tab:sweep}
 \small
 \begin{tabular}{llrrrrrrrr}
@@ -745,15 +777,19 @@ at hard difficulty are primarily expression formatting errors, not
 mathematical inadequacy.  Future versions could use structured tool
 calling to separate these concerns.
 
-The current evaluation uses only two seeds per difficulty level.  Hard
+The manuscript's preliminary comparison uses only two seeds per difficulty
+level and does not report the proposed cross-provider prompt ablation.  Its
+underlying run archive is not included, limiting independent verification
+of the numerical tables and behavioral aggregates.  Hard
 difficulty shows high variance (GPT-5.4 achieves 0.29 on one seed and
 3.68 on the other), suggesting that some PDE instances are inherently
 easier to identify.  A larger seed sweep would provide more robust
 estimates.
 
 GPT-5.2 and newer OpenAI models default to \texttt{reasoning\_effort:
-none}, which disables chain-of-thought reasoning.  All results reported
-here use \texttt{reasoning\_effort: medium}, set explicitly via the API.
+none}, which disables chain-of-thought reasoning.  The draft reports
+\texttt{reasoning\_effort: medium} for GPT-5.4 and GPT-5.4-mini; GPT-4o
+has no reasoning-effort override in the runner.
 Runs without this override would likely perform significantly worse,
 particularly GPT-5.4-mini, and the results should not be compared to
 evaluations that use the default API setting.
@@ -784,8 +820,10 @@ monitoring accuracy and control efficiency without behavioral proxies.
 This addresses a gap identified by Burnell et al.\ in the current
 landscape of cognitive evaluations for AI systems.
 
-All code, run logs, and analysis tools are publicly available at
-\texttt{[repository URL]}.
+The code, analysis tools, and selected notebook outputs are available at
+\url{https://github.com/Hydrodynamical/PDE_Learning}.  The complete
+source-run archive for the manuscript's tables and checked-in figures
+remains to be published.
 
 \bibliographystyle{plainnat}
 
