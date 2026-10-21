@@ -7,6 +7,7 @@
 \hypersetup{pdfsubject={Research preprint on scientific-agent evaluation}}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{placeins}
+\usepackage{needspace}
 \newcommand{\dd}{\,\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\Poly}{\mathcal{P}}
@@ -28,60 +29,62 @@ An Audit of Measurement Selection in Weak-Form Inverse Problems}
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Interactive scientific benchmarks aim to measure how language models choose
-experiments, but recovery scores also depend on the observation model and
-numerical implementation.
-We audit a weak-form inverse-problem benchmark using 180 archived scored runs
-from six models on 30 shared elliptic-equation instances, paired statistical
-comparisons, and new numerical controls kept distinct from historical outcomes.
-A fixed sine-query design recovers all 30 reconstructed tasks at the strict
-error threshold using the protocol's minimum solve budget. On 300 fresh seeds,
-minimum-budget success is 92\%, 91\%, and 98\% by difficulty, with ten
-unidentifiable zero-forcing cases retained.
-Free consistency checks supply additional observations, while absolute rounding
-and small singular values make recovery sensitive to numerical representation.
-An exact nonuniqueness result further shows why full floating-point matrix rank
-cannot establish structural identifiability.
+Weak measurements of a fixed solution and its source provide a controlled
+setting for studying how language models choose informative observations.
+We study a one-dimensional elliptic boundary-value problem in which an agent
+selects test functions, a tool returns weighted source integrals, and a numerical
+solver fits the unknown coefficients by least squares.
+Our audit combines 180 archived scored runs from six models on 30 shared tasks
+with fixed and randomized query designs, numerical sensitivity tests, and
+validation on 300 fresh tasks.
+Fixed sine tests recover all 30 archive-derived tasks at the minimum permitted
+query count; on fresh tasks, success is 92\%, 91\%, and 98\% across the three
+settings, including ten unidentifiable zero-forcing cases.
+An exact nonuniqueness result and a consistency--stability analysis distinguish
+ambiguity in the inverse problem from sensitivity of its discretization, while
+free diagnostic measurements complicate comparisons under a stored-query budget.
+These results delimit what coefficient-recovery scores establish about a
+language model's measurement-selection ability.
 \end{abstract}
 
 \section{Introduction}
 
 A scientific agent must choose observations that distinguish plausible
-explanations. A benchmark can make this process inspectable by placing the agent
-in a known inverse problem: the hidden parameters are available to the evaluator,
-the measurement actions have mathematical definitions, and the tools expose the
-information used by the agent. However, a high recovery score can also reflect
-properties of the numerical environment. Before interpreting the score as
-experimental-design ability, we must understand which parameters the observations
-identify and how numerical error affects their recovery.
+explanations. In an inverse problem, the question is concrete: which measurements
+identify the unknown parameters, and how reliably can those parameters be
+recovered? A controlled mathematical environment lets us study those choices
+while knowing the parameters used to generate the observations. It also makes
+the numerical assumptions behind an agent's score available for scrutiny.
 
-We investigate a benchmark in which a language model identifies the coefficients
-of an elliptic differential equation by selecting weak-form test functions.
-The solver handles quadrature and least squares; the agent chooses measurements,
-inspects estimates, and decides when to stop. The setup is deliberately small
-and instrumented. Unlike an open-ended discovery task, it permits direct analysis
-of the joint measurement matrix and an exact specification of the correctness
-event. ``Learn'' in the title means identification within an interaction, rather
-than updating model weights or discovering an unknown equation family.
+Our setting is a one-dimensional elliptic boundary-value problem, representing
+a stationary diffusion--transport--reaction equation. The spatial response is
+available through tools, while the diffusion, transport, reaction, and source
+fields are hidden. The agent selects functions against which to integrate the
+equation. Each choice imposes another weak constraint on the same fixed system; the
+source and boundary conditions remain fixed throughout a task. Numerical tools assemble
+the resulting linear equations and fit the coefficient fields. The agent chooses what to measure, which diagnostics to request, and when to
+stop.
+
+This setup connects two familiar questions. For PDE and inverse-problem readers,
+it asks whether weak measurements of one solution determine the operator and
+whether the discrete recovery is stable. For machine-learning readers, it asks
+whether a model's sequential choices improve a tool-assisted estimation task
+over simple fixed designs. The equation family and parameter count are disclosed, while the supplied
+solver handles the coefficient representation. ``Learn'' means identifying
+parameters within a session. The spatially
+one-dimensional problem is mathematically an ODE boundary-value problem, and
+does not test multidimensional PDE structure.
 
 The benchmark first appeared in a Kaggle write-up \citep{kaggle2026pde}.
-This paper reexamines its public six-model archive rather than treating the
-original behavioral labels as established cognitive measurements.
-We ask three questions: (i) how do the archived policies differ on shared tasks;
-(ii) what recovery is possible with simple numerical query policies; and
-(iii) which aspects of the protocol and discretization constrain the interpretation
-of those comparisons?
-
-Our contributions are an auditable formulation of the measurement task; a
-reproducible analysis of 180 scored records with comparisons paired by problem
-instance; and new controls that expose the distinction between structural
-nonuniqueness, numerical conditioning, and measured agent behavior.
-An exact polynomial-family result gives a concrete failure of unconditional
-identifiability. Reconstructed measurements then quantify numerical and protocol
-effects on the actual archived tasks. The fixed sine control succeeds on all 30 archive-derived tasks, so the archived
-results do not establish a benefit from adaptive language-model measurement
-selection. The broader contribution is a case study of how omitted numerical
-controls can change a scientific-agent benchmark's interpretation.
+We reanalyze its six-model archive and ask: how do the recorded policies differ
+on shared tasks; what do simple numerical query designs achieve; and how do
+identifiability, numerical error, and the observation budget affect those
+comparisons? Our contributions are a precise account of the observation model,
+reproducible task-level comparisons, and mathematical and numerical controls.
+Fixed sine tests suffice on all 30 archive-derived tasks. Fresh-task validation
+and an exact ambiguity construction delimit that finding. The resulting case
+study shows why evaluation of scientific agents needs both an inverse-problem
+analysis and non-language-model controls.
 
 \section{Related Work}
 
@@ -100,9 +103,8 @@ not claim to introduce interactive scientific evaluation itself.
 LLM-SR uses language models for scientific equation discovery, and LLM-SRBench
 evaluates discovery from observations \citep{shojaee2025llmsr,shojaee2025llmsrbench}.
 Weak SINDy uses integral formulations for PDE identification
-\citep{messenger2021wsindy}. Here the operator family and polynomial basis are
-known, and the agent chooses test functions while a supplied solver estimates
-coefficients. This is a measurement-selection problem within a specified model,
+\citep{messenger2021wsindy}. Here the operator family is fixed, and a supplied solver fits coefficients in
+a prescribed polynomial basis from the agent's chosen test functions. This is a measurement-selection problem within a specified model,
 rather than symbolic structure discovery. Optimal experimental design provides
 a relevant reference \citep{mackay1992information,alexanderian2021oed}, but its
 criteria require an explicit noise model, admissible designs, and appropriate
@@ -124,43 +126,87 @@ prompted protocol.
 \section{Benchmark and Observation Model}
 \label{sec:task}
 
-\subsection{Hidden Equation and Linear Recovery}
+\subsection{Forward Problem, Observations, and Recovery}
 
-The hidden boundary value problem is
+The hidden equation is
 \begin{equation}
- \begin{gathered}-(au')'+bu'+cu=f,\quad x\in[0,1],\\ u(0)=u(1)=0.\end{gathered}
+ \begin{gathered}-(au')'+bu'+cu=f,\quad x\in(0,1),\\
+ u(0)=u(1)=0.\end{gathered}
  \label{eq:pde}
 \end{equation}
-Each field \(q\in\{a,b,c,f\}\) has the form
-\(q(x)=\sum_{j=0}^{N-1}\theta_{q,j}P_j(x)\), using ordinary shifted Legendre
-polynomials on \([0,1]\). The polynomials are orthogonal but not orthonormal.
-The generator samples coefficients and computes \(u\) numerically.
-For an admissible test function \(\varphi_k\) vanishing at the endpoints,
+Here \(u\) is the spatial response, primes denote spatial derivatives, and
+\(a,b,c,f\) are diffusion, transport, reaction, and forcing, respectively.
+The forward problem computes \(u\) from these fields and boundary data. The
+inverse problem fixes that response and seeks the fields that produced it.
+The supplied generator and solver use the parameterization
+\(q(x)=\sum_{j=0}^{N-1}\theta_{q,j}P_j(x)\), for
+\(q\in\{a,b,c,f\}\), using ordinary shifted Legendre polynomials on
+\([0,1]\). For example, \(P_0(x)=1\) and \(P_1(x)=2x-1\). The fields are therefore
+polynomials of degree at most \(N-1\). This basis is orthogonal but not
+orthonormal.
+
+At the continuum level, take smooth coefficients with positive diffusion and an
+observed solution \(u\in H_0^1(0,1)\). Here \(H_0^1\) consists of
+square-integrable functions with square-integrable first weak derivative and
+zero endpoint values. Multiplying Equation~\eqref{eq:pde} by a test function
+\(\varphi_k\in H_0^1(0,1)\) and integrating by parts gives
 \begin{equation}
- \begin{aligned}&\int au'\varphi_k'\dd x+\int bu'\varphi_k\dd x+\int cu\varphi_k\dd x\\ &\qquad =r_k,\qquad r_k=\int f\varphi_k\dd x.\end{aligned}
+ \begin{aligned}&\int au'\varphi_k'\dd x+\int bu'\varphi_k\dd x+\int cu\varphi_k\dd x\\
+ &\qquad=r_k,\qquad r_k=\int f\varphi_k\dd x.
+ \end{aligned}
  \label{eq:weak}
 \end{equation}
-All integrals are over \([0,1]\). Define
+All integrals are over \((0,1)\). The endpoint condition removes the boundary
+term, so only first derivatives of \(u\) are needed. A query chooses the
+weighting function \(\varphi_k\) and observes the source integral \(r_k\),
+also called a source moment. For example, \(\varphi_k=\sin(k\pi x)\)
+requests a sine moment of the source.
+
+Each test function supplies one linear equation in the unknown operator
+coefficients. Define
 \begin{align}
  D_{kj}&=\int P_j u'\varphi_k'\dd x,& B_{kj}&=\int P_j u'\varphi_k\dd x,\nonumber\\
  C_{kj}&=\int P_j u\varphi_k\dd x,& F_{kj}&=\int P_j\varphi_k\dd x.
  \label{eq:matrices}
 \end{align}
-The tool separately minimizes \(\|A\theta-r\|_2\) for the operator, where
-\(A=[D\mid B\mid C]\in\R^{K\times3N}\), and \(\|F\theta_f-r\|_2\) for
-the source. Although the prompt describes \(4N\) unknown coefficients, the
-returned source moments already provide the right-hand side of the operator
-system. The requirement of \(K\ge4N\) before solving is a protocol rule,
-rather than a rank guarantee.
+After \(K\) queries, let \(A=[D\mid B\mid C]\in\R^{K\times3N}\) and
+\(\theta=(\theta_a^\top,\theta_b^\top,\theta_c^\top)^\top\).
+The tool separately fits
+\begin{equation}
+ \begin{aligned}
+ \widehat\theta&\in\arg\min_\theta\|A\theta-r\|_2,\\
+ \widehat\theta_f&\in\arg\min_{\theta_f}\|F\theta_f-r\|_2.
+ \end{aligned}
+ \label{eq:fits}
+\end{equation}
+For a nonunique fit, the tool selects the minimum Euclidean norm solution under
+its numerical singular-value cutoff. Both fits use the measured vector \(r\),
+so operator recovery does not require a preceding source estimate. Source moments provide data in addition to the observed
+solution; recovery is not based on \(u\) alone.
 
+The agent chooses the test functions, rather than matrix entries. The tool
+constructs and stores each row internally; the agent receives \(r_k\), then
+coefficient estimates and selected diagnostics when it requests a solve.
+The full joint matrices and spectra reported below are reconstructed for the
+audit.
+The tests define identification constraints; the forward solution is computed
+by finite differences, rather than expanded in these test functions. The
+protocol requires \(K\ge4N\) before a solve, although the operator fit has
+\(3N\) unknowns. This rule does not guarantee rank or uniqueness.
+
+\Needspace{8\baselineskip}
 \subsection{Actions, Information, and Budgets}
 
-Table~\ref{tab:tools} summarizes the interface. The model can evaluate the
+Table~\ref{tab:tools} summarizes the interface. The recovered prompt
+implementation specifies the equation and parameter count but does not name the
+Legendre basis; its coordinate recovery is delegated to the solve tool. The
+model can evaluate the
 solution and its numerical derivative, choose symbolic expressions, inspect
 estimates, and request consistency checks. The parser admits mathematical
 expressions including polynomial, trigonometric, exponential, and localized
-functions, subject to endpoint and validity checks. It does not impose a common
-amplitude normalization.
+functions, subject to sampled-value and endpoint checks. Numerical acceptance
+does not certify membership in the continuum test space; our predefined controls
+use smooth functions. There is no common amplitude normalization.
 
 \begin{table}[t]
 \caption{Session actions. Only accepted stored queries consume the query budget.
@@ -173,7 +219,7 @@ Action & Returned information or effect\\
 \midrule
 \texttt{eval\_solution} & Values of \(u,u'\) at chosen points.\\
 \texttt{QUERY} & \(r_k\); appends rows to \(A,F\).\\
-\texttt{term\_integrals} & The three unweighted integrals with \(P_0=1\).\\
+\texttt{term\_integrals} & The three term integrals before weighting by the coefficient basis.\\
 \texttt{solve} & Least-squares coefficient estimates and changes.\\
 \texttt{check} & Predicted weak left-hand side and actual source moment for a candidate expression.\\
 \texttt{PREDICT} & Submits the latest solve coefficients.\\
@@ -181,7 +227,8 @@ Action & Returned information or effect\\
 \end{tabularx}
 \end{table}
 
-The protocol permits at most one stored query per response; several free
+A turn is one model response, possibly containing reasoning and tool commands.
+The protocol permits at most one stored query per turn; several free
 commands can share a response. Submission cannot share a response with a query.
 The prompt encourages repeated solves and requests confidence reports. Therefore
 solve counts and iteration are behaviors under an instruction to iterate.
@@ -210,6 +257,12 @@ Solution grid points & 2001 & 2001 & 4001\\
 \end{tabular}
 \end{table}
 
+The generator checks diffusion positivity on 500 spatial points; the parameter
+\(a_{\min}\) controls the constant diffusion coefficient, not a certified
+pointwise lower bound. Reaction can have either sign, so diffusion positivity
+alone does not guarantee a unique continuum forward solution. The evaluation
+takes the computed solution as data.
+
 The reference implementation uses second-order finite differences for the
 solution, a fourth-order interior derivative with boundary stencils, and
 composite Simpson quadrature on the solution grid. It rounds each stored matrix
@@ -222,25 +275,53 @@ These choices matter when singular values are small. Table~\ref{tab:difficulty}
 also shows that the three difficulty labels are bundled settings; differences
 cannot be attributed solely to dimension.
 
-\subsection{Error and Identifiability}
+\subsection{Coefficient Error, Uniqueness, and Stability}
 \label{sec:identifiability}
 
-For each field, the scoring event uses maximum absolute coefficient deviation:
+The score measures error in the prescribed coefficient coordinates:
 \begin{equation}
  E_q=\max_j|\widehat\theta_{q,j}-\theta_{q,j}|,\qquad
  E=\sum_{q\in\{a,b,c,f\}}E_q.
  \label{eq:error}
 \end{equation}
-Our primary threshold is \(E<0.01\); \(E<0.1\) is a sensitivity analysis.
-These are not function-error thresholds on held-out points. The separately
-reported function error is bounded by \(NE\), since \(|P_j(x)|\le1\), but
-equal numerical thresholds are not equivalent.
+The primary success event is \(E<0.01\); \(E<0.1\) is a sensitivity check.
+This absolute, basis-dependent parameter error is distinct from a PDE residual
+or a function error. For each field,
+\(\|\widehat q-q\|_{L^\infty(0,1)}\le NE_q\), since \(|P_j|\le1\).
+Thus a small coefficient error controls field error here, but the same numerical
+thresholds for the two quantities are not equivalent.
 
-Full column rank of the joint matrix \(A\), rather than each coefficient block,
-is necessary and sufficient for unique unconstrained least-squares operator
-coefficients. Small singular values can amplify discretization and rounding
-errors. Floating-point rank is a property of the reconstructed finite matrix;
-it is not a uniqueness theorem for the underlying observation operator.
+Three questions should be separated. \emph{Structural identifiability} asks
+whether different coefficient triples can produce the same \(u,f\), even with
+all admissible weak measurements. \emph{Measurement selection} asks whether a
+finite set of tests distinguishes triples in the chosen coefficient space.
+\emph{Numerical stability} asks how small data and discretization errors affect
+the recovered coefficients. Full column rank of an exact moment matrix formed
+from the continuum solution would certify uniqueness in the operator coefficient space.
+Full rank after numerical approximation and rounding need not do so.
+Separate full-rank blocks \(D,B,C\) do not exclude dependencies between blocks.
+
+To see the role of numerical error, write \(A_h,r_h\) for the assembled system
+and \(\theta_*\) for the true operator coefficients. Its consistency defect is
+\(e_h=A_h\theta_*-r_h\). The forward solve, derivative approximation,
+quadrature, and rounding need not preserve the weak identity exactly, so this
+defect can be nonzero even at the truth. If \(A_h\) has full column rank,
+exact least squares for that assembled system gives
+\begin{equation}
+ \begin{aligned}
+ \widehat\theta-\theta_*&=-A_h^\dagger e_h,\\
+ \|\widehat\theta-\theta_*\|_2&\le\frac{\|e_h\|_2}{\sigma_{\min}(A_h)}.
+ \end{aligned}
+ \label{eq:stability}
+\end{equation}
+Here \(A_h^\dagger\) is the pseudoinverse. The bound concerns the operator
+fit; the score also includes the separately fitted source. A small fitted weak
+residual \(\|A_h\widehat\theta-r_h\|_2\) need not imply a small coefficient error: a small singular value can amplify a small
+consistency defect. The forward finite-difference residual, fitted weak residual,
+and coefficient score therefore answer different questions.
+
+Let \(\Poly_d\) denote polynomials of degree at most \(d\). The following
+example shows an ambiguity that persists even before discretization.
 
 \begin{proposition}[An admissible nonidentifiable family]
 \label{prop:nullity}
@@ -251,11 +332,11 @@ with domain \(\Poly_{N-1}^3\). Then \(T\) has rank \(N+2\) and nullity
 measurements unchanged at fixed \(u,f\).
 \end{proposition}
 
-A proof and explicit elliptic examples appear in Appendix~\ref{app:proof}.
-This is a counterexample within the permitted class, rather than a claim that
-the 30 sampled instances belong to this quadratic-solution family. It rules out
-unconditional identifiability. Separate audits are needed to characterize
-recoverability on the sampled tasks. There is also a positive-probability
+Even arbitrarily many exact weak measurements cannot distinguish operators
+separated by these kernel directions. Appendix~\ref{app:proof} gives the proof
+and examples with positive diffusion and nonnegative reaction. This quadratic-
+solution family is an admissible counterexample, not a classification of the
+30 sampled instances. There is also a positive-probability
 zero-excitation event in the generator: each forcing coefficient is zeroed
 independently with probability \(s\), giving
 \(\Pr(f\equiv0)=s^N\), or 0.09, 0.008, and 0.0001 in the three settings.
@@ -270,9 +351,15 @@ Proposition~\ref{prop:nullity} is a separate ambiguity mechanism.
 
 \subsection{Archive and Provenance}
 
+A \emph{task} is one generated coefficient tuple and its numerical solution;
+a \emph{run} is one agent's interaction with a task. A \emph{policy} is a rule
+for selecting actions, fixed in advance or dependent on feedback. A random
+\emph{seed} initializes the reproducible task generator. Thus six models on
+30 shared tasks give 180 runs, not 180 different equations.
+
 The public Kaggle dataset, \emph{Elliptic Differential Equation LLM Reasoning},
 version 1, contains 180 scored logs: six models, three difficulty settings,
-and seeds 1--10 in every cell. The same 30 coefficient truths are shared across
+and seeds 1--10 in every cell. The same 30 ground-truth coefficient tuples are shared across
 models. The archive was released on 16 April 2026; the provider model IDs are
 listed in Appendix~\ref{app:repro}.
 All logs record the \texttt{standard} prompt, called enhanced in the write-up.
@@ -290,13 +377,15 @@ numerical environment; they do not recreate historical provider calls.
 \label{sec:controls}
 
 For the controls, we regenerate all 30 tasks from their recorded seeds, verify
-exact equality with saved coefficient truths, and evaluate
+exact equality with saved ground-truth coefficient vectors, and evaluate
 non-language-model query policies under the same accepted-query limits and
 supplied query/solve interface. The policies use no hidden coefficients, solution values, measurement responses,
-or diagnostics to select expressions. Fixed sine chooses
-\(\varphi_k=\sin(k\pi x)\), \(k=1,\ldots,B\), where \(B=6N\) is the
-stored-query budget. Boundary Legendre chooses \(x(1-x)P_{k-1}(x)\), using
-factored expressions for numerical stability. Random mixed draws uniformly
+or diagnostics to select expressions. Fixed sine uses the Dirichlet Laplacian eigenfunctions
+\(\varphi_k=\sin(k\pi x)\), \(k=1,\ldots,K_{\max}\), where
+\(K_{\max}=6N\) is the
+stored-query budget. Boundary Legendre multiplies a polynomial test by the
+endpoint-vanishing factor \(x(1-x)\), giving \(x(1-x)P_{k-1}(x)\).
+The implementation uses factored expressions for numerical stability. Random mixed draws uniformly
 from five admissible families, using ten independently seeded query lists per
 setting, reused across the ten PDE seeds. Its fixed parameter ranges and exact
 expressions are released in the experiment output. All controls solve at every
@@ -315,8 +404,6 @@ each reconstructed row and its source moment by a common amplitude before
 its effect here tests the absolute quantization rule. It is a post hoc numerical
 sensitivity analysis, rather than an optimized query policy or a model rerun.
 
-\subsection{Statistical Unit and Behavioral Diagnostics}
-
 We also refine the forward and quadrature grids together by factors two and
 four. Original-resolution primary controls use the native dense solver.
 Refinements use an independently assembled banded solver for the same finite-
@@ -333,6 +420,8 @@ language-model experiment. We report outcomes on all 100 tasks per setting,
 with Wilson intervals and descriptive zero/nonzero-source breakdowns. Reused
 seed labels across difficulties are not pooled into independent sampling units.
 
+\subsection{Task-Level Comparisons and Confidence}
+
 The comparison unit is the shared PDE seed within each difficulty, not an
 individual coefficient, solve, or confidence report. Each model has ten tasks
 per setting. We report Wilson 95\% intervals for marginal success proportions
@@ -343,9 +432,11 @@ within-task response variance. Empirical paired-bootstrap intervals can
 degenerate when all ten observed task differences agree. These intervals describe uncertainty under task
 resampling assumptions and do not resolve selection into the scored archive.
 
-For confidence, a report is paired only with a solve returned on a strictly
-earlier transcript turn. The event is \(E_q<0.1\), separately for
-\(q\in\{a,b,c\}\). All reports and coefficient blocks within a run are
+A confidence report states the model's probability that a coefficient block
+is accurate. We pair it only with a solve returned on a strictly earlier turn.
+Its correctness event is \(E_q<0.1\), separately for
+\(q\in\{a,b,c\}\), which differs from final-run success \(E<0.01\).
+All reports and coefficient blocks within a run are
 kept together when resampling; run-balanced scores avoid giving a model more
 weight merely because it reports more often. Action counts, first-to-last solve
 improvement, and expression-family entropy are descriptive diagnostics. They do
@@ -360,9 +451,8 @@ Figure~\ref{fig:success} shows the archived success counts. At \(E<0.01\),
 Gemini 3.1 Pro succeeds on \(10/10\), \(9/10\), and \(10/10\) easy, medium,
 and hard tasks; Claude Opus 4.6 achieves \(10/10\), \(9/10\), and \(8/10\).
 GPT-5.4 achieves \(7/10\), \(3/10\), and \(1/10\). The other models also
-vary substantially across settings and seeds. The regenerated figure corrects
-the write-up asset's hard GPT-5.4 mini count from \(0/10\) to \(2/10\),
-which agrees with both individual logs and the archived sweep summary.
+vary substantially across settings and seeds. Corrections to the earlier write-up figures are documented in
+Appendix~\ref{app:repro}.
 
 With ten tasks, even \(10/10\) has a Wilson 95\% interval of approximately
 \([0.72,1.00]\), and \(9/10\) has \([0.60,0.98]\). Thus the heatmap is
@@ -456,7 +546,7 @@ controls and a stated treatment of unidentifiable instances.
 \subsection{What Numerical Reconstruction Can Establish}
 \label{sec:numerics}
 
-All 30 coefficient truths regenerate exactly, and the reconstructed reference
+All 30 ground-truth coefficient vectors regenerate exactly, and the reconstructed reference
 implementation reproduces all 2,874 archived query source moments exactly at
 the stored precision. Source-moment agreement does not test the historical forward solution or
 unretained operator matrix: the source moment depends only on \(f\), the test
@@ -507,15 +597,11 @@ does not prove semantic independence, but each check exposes an actual source
 moment. Thus stored-query counts alone do not equate the information acquired
 by two policies. This behavior is permitted by the protocol.
 
-The confidence analysis finds 733 reports, of which 707 follow a solve and
-26 are excluded. The retained reports yield 2,121 coefficient observations.
-Causal matching changes the solve assigned to 71 reports relative to the legacy
-query-count rule; 827 observations lie on interior confidence-bin boundaries
-that the older plots could count twice. Corrected calibration curves and the
-Kaggle action, improvement, and diversity figures appear in
-Appendix~\ref{app:behavior}. Their interpretation remains descriptive: repeated
-reports are dependent, prompt instructions affect action use, and expression
-families are not independent measurement directions.
+Appendix~\ref{app:behavior} reports confidence, action use, improvement between
+solves, and expression-family diversity. Confidence reports are matched to the
+estimates available when they were made. Repeated reports remain grouped within
+their run, and expression diversity is not equated with independent constraints.
+These diagnostics describe interaction behavior under the supplied prompts.
 
 \section{Discussion and Limitations}
 
@@ -523,16 +609,15 @@ The audit reveals three requirements for interpreting measurement-selection
 benchmarks. First, the observation model must distinguish identifiable
 parameters from equivalent operators. A finite matrix's numerical rank does not
 replace this analysis. Second, normalization, precision, and discretization must
-be specified and tested. Changing a mathematical representation without adding
-information should not silently change the claimed ability being measured.
+be specified and tested. Equivalent continuum measurement designs can have different rounding errors;
+that distinction should be explicit in claims about the ability being measured.
 Third, every truth-dependent observation must enter the information accounting,
 including diagnostics exposed as free tools.
 
 Our evidence is deliberately bounded. The model archive contains 30 tasks and one
 scored response trajectory per model--task pair, rather than a prospective
 all-attempt study. Difficulty settings conflate dimension, scale, sparsity, and
-resolution. This spatially one-dimensional equation is mathematically an ODE
-boundary-value problem; the task does not test multidimensional PDE structure. We cannot reconstruct missing attempt histories or exact provider
+resolution. We cannot reconstruct missing attempt histories or exact provider
 settings. The structural proposition concerns an admissible subclass and does
 not determine the continuum rank of every sampled operator. Reconstructed
 spectra, amplitude tests, and numerical controls inherit the current solver and
@@ -555,7 +640,7 @@ inspectable. The archived models differ in recovery and interaction behavior,
 but an interpretation in terms of experimental-design ability requires controls
 for the observation model, numerical conditioning, and information accounting.
 A fixed sine design suffices on all 30 archive-derived tasks; fresh seeds
-reveal unidentifiable zero-excitation cases and additional numerical failures.
+reveal unidentifiable zero-excitation cases and additional coefficient-recovery failures.
 Both results make numerical baselines essential to interpreting model scores. The released
 analysis provides checks for this benchmark and a concrete
 basis for designing a more controlled prospective study.
@@ -571,11 +656,10 @@ readiness for autonomous scientific deployment from these experiments.
 
 \section*{Reproducibility}
 
-Code, analysis scripts, pinned archive provenance, and derived summaries are
-available at \url{https://github.com/Hydrodynamical/PDE_Learning}.
-The new controls and analyses in this revision use no provider calls. Appendix~\ref{app:repro}
-gives data and numerical details. The PDF is a public preprint using the ICML
-2026 format; it is not an anonymized conference submission.
+Code, pinned data provenance, and analysis scripts are available at
+\url{https://github.com/Hydrodynamical/PDE_Learning}.
+Appendix~\ref{app:repro} gives data and numerical details. The offline analyses
+require no new model calls.
 
 \bibliography{references}
 \bibliographystyle{icml2026}
@@ -653,8 +737,9 @@ the main text prohibit a claim of bitwise historical replay.
 
 The original write-up describes basis sizes 3/5/8 and a held-out-grid function
 success criterion; the logs and scoring code establish 2/3/4 and
-Equation~\eqref{eq:error}. These corrections are recorded in the derived
-summaries. The earlier draft's distinct three-model, two-seed pilot lacks source
+Equation~\eqref{eq:error}. The regenerated strict-threshold figure also corrects the hard GPT-5.4 mini
+count from 0/10 to 2/10, matching the individual logs and saved sweep summary.
+These corrections are recorded in the derived summaries. The earlier draft's distinct three-model, two-seed pilot lacks source
 logs and used an unverified error norm. Its numeric tables are preserved in
 \path{paper_artifacts/legacy_pilot_tables.tex} for provenance, but excluded from
 this manuscript's empirical evidence.
@@ -683,7 +768,10 @@ A high entropy does not imply linearly independent or useful measurements.
 The confidence plots use disjoint bins \([l,h)\), with 1 included in the last
 bin, and show mean confidence against empirical correctness. Reports are
 matched only to strictly earlier solves, since a solve requested in a report's
-own response has not yet been returned. The corrected 707 reports contribute
+own response has not yet been returned. The archive contains 733 confidence reports: 707 have a preceding solve and
+26 are excluded. Causal matching changes the solve paired to 71 reports relative
+to the legacy query-count rule; 827 observations lie on interior bin boundaries
+that the old plots could count twice. The retained reports contribute
 2,121 dependent observations for \(a,b,c\), excluding \(f\). Individual
 coefficient reports are not treated as independent tasks.
 
