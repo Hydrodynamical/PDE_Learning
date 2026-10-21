@@ -166,7 +166,10 @@ The research revision adds fixed and randomized numerical controls, paired
 statistical comparisons, joint-matrix spectra, and precision/refinement audits.
 Fixed sine queries recover all 30 reconstructed tasks at the strict threshold
 using the minimum permitted solve budget. This limits claims of a benefit from
-adaptive language-model measurement selection on these instances.
+adaptive language-model measurement selection on these instances. A separate
+300-task fresh-seed validation reports both strong fixed-policy recovery and
+failures from zero excitation and numerical sensitivity; the paper keeps those
+results distinct from the archive.
 
 The earlier three-model, two-seed pilot tables are retained separately in
 `paper_artifacts/legacy_pilot_tables.tex`. Their source logs have not been recovered, and they are not

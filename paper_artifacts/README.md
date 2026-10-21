@@ -111,12 +111,13 @@ setting up the pinned Python 3.12 environment and downloading the pinned ZIP:
 python scripts/analyze_archive_statistics.py --archive /tmp/pde-runs-v1.zip
 python scripts/control_baselines.py --archive /tmp/pde-runs-v1.zip
 python scripts/audit_identifiability.py --archive /tmp/pde-runs-v1.zip
+python scripts/validate_sine_generalization.py
 python scripts/plot_research_audit.py
 python scripts/verify_paper_artifacts.py
 ```
 
-These commands make no model or network calls. A full control experiment takes
-roughly one to two minutes on the development machine; timings depend on hardware.
+These commands make no model or network calls. A full archived-task control experiment takes
+roughly one to two minutes; the fresh-seed validation takes about three minutes on the development machine; timings depend on hardware.
 
 - `statistical_analysis.json` retains Wilson success intervals, all 45 paired
   comparisons, discordance counts, exact paired tests, and Holm-adjusted values
@@ -171,3 +172,27 @@ text follows the eight-page constraint, with references and detailed appendices
 following it. It is a public preprint and retains author information and public
 repository links. An actual conference submission requires the target year's
 instructions and anonymization.
+
+## Fresh-seed validation after selecting fixed sine
+
+`scripts/validate_sine_generalization.py` evaluates every seed 1001–1100 in
+each of the three difficulty settings, using the native original-resolution
+solver and fixed sine queries. This experiment follows design selection on the
+archived tasks; it is not a historical held-out study or a formal preregistration.
+All 300 planned tasks complete without retries, exclusions, or execution errors.
+`sine_generalization.json` retains the complete plan, truths, task outcomes,
+zero-source/zero-solution flags, ranks, numerical fingerprints, and provenance.
+
+Strict-threshold success at the minimum/full budgets is 92/92 of 100 easy,
+91/85 medium, and 98/93 hard. Wilson intervals use all 100 tasks per difficulty.
+Seven easy and three medium tasks have zero forcing and zero solutions, with
+operator rank zero; all fail recovery. These remain in the primary denominators.
+The generator assigns zero forcing probability `sparsity**N`. Nonzero-source
+failures also remain, so the archived 30/30 result must not be generalized to
+perfect generator-wide recovery. Extra stored queries turn six medium and five
+hard minimum-budget successes into failures in this fixed policy.
+
+No new language-model runs are included in this validation. It does not establish
+whether adaptation improves results on fresh seeds. Source/runtime hashes and
+all raw/displayed scores are retained; the provenance checker verifies this
+experiment too. Generated `sine_generalization_table.tex` reports the main rates.

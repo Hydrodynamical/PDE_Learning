@@ -30,6 +30,12 @@ def main():
     compact = json.loads((ARTIFACTS/'control_baselines_summary.json').read_text())
     audit = json.loads((ARTIFACTS/'identifiability_audit.json').read_text())
     stats = json.loads((ARTIFACTS/'statistical_analysis.json').read_text())
+    fresh = json.loads((ARTIFACTS/'sine_generalization.json').read_text())
+    for path, expected in fresh['source_sha256'].items():
+        check(digest(ROOT/path) == expected, f'Fresh-seed output stale after changing {path}')
+    check(len(fresh['tasks']) == len(fresh['plan']) == 300, 'Missing fresh-seed outcomes')
+    check({(r['difficulty'],r['seed']) for r in fresh['tasks']} ==
+          {(r['difficulty'],r['seed']) for r in fresh['plan']}, 'Fresh-seed task membership differs from plan')
     for name, data in [('controls',controls), ('audit',audit), ('statistics',stats)]:
         check(data['archive_sha256'] == manifest['archive_sha256'], f'{name}: archive mismatch')
         hashes = data['method']['source_code_sha256'] if name == 'audit' else data['source_sha256']

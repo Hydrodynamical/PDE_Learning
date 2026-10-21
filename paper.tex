@@ -35,14 +35,13 @@ We audit a weak-form inverse-problem benchmark using 180 archived scored runs
 from six models on 30 shared elliptic-equation instances, paired statistical
 comparisons, and new numerical controls kept distinct from historical outcomes.
 A fixed sine-query design recovers all 30 reconstructed tasks at the strict
-error threshold using the protocol's minimum solve budget, so these tasks do
-not establish a benefit from adaptive language-model measurement selection.
+error threshold using the protocol's minimum solve budget. On 300 fresh seeds,
+minimum-budget success is 92\%, 91\%, and 98\% by difficulty, with ten
+unidentifiable zero-forcing cases retained.
 Free consistency checks supply additional observations, while absolute rounding
 and small singular values make recovery sensitive to numerical representation.
 An exact nonuniqueness result further shows why full floating-point matrix rank
 cannot establish structural identifiability.
-The audit provides reproducible diagnostics for separating observable agent
-behavior from claims about experimental-design ability.
 \end{abstract}
 
 \section{Introduction}
@@ -79,7 +78,7 @@ instance; and new controls that expose the distinction between structural
 nonuniqueness, numerical conditioning, and measured agent behavior.
 An exact polynomial-family result gives a concrete failure of unconditional
 identifiability. Reconstructed measurements then quantify numerical and protocol
-effects on the actual archived tasks. The fixed sine control succeeds on every reconstructed task, so the archived
+effects on the actual archived tasks. The fixed sine control succeeds on all 30 archive-derived tasks, so the archived
 results do not establish a benefit from adaptive language-model measurement
 selection. The broader contribution is a case study of how omitted numerical
 controls can change a scientific-agent benchmark's interpretation.
@@ -256,7 +255,15 @@ A proof and explicit elliptic examples appear in Appendix~\ref{app:proof}.
 This is a counterexample within the permitted class, rather than a claim that
 the 30 sampled instances belong to this quadratic-solution family. It rules out
 unconditional identifiability. Separate audits are needed to characterize
-recoverability on the sampled tasks.
+recoverability on the sampled tasks. There is also a positive-probability
+zero-excitation event in the generator: each forcing coefficient is zeroed
+independently with probability \(s\), giving
+\(\Pr(f\equiv0)=s^N\), or 0.09, 0.008, and 0.0001 in the three settings.
+When \(f\equiv0\), under homogeneous boundary data the native forward solve returns \(u=0\) when
+its matrix is nonsingular. Then every operator design row vanishes, irrespective
+of the test function, so no measurement policy can identify \(a,b,c\) from
+these observations. The nonzero-source construction in
+Proposition~\ref{prop:nullity} is a separate ambiguity mechanism.
 
 \section{Evaluation Design}
 \label{sec:methods}
@@ -316,6 +323,15 @@ Refinements use an independently assembled banded solver for the same finite-
 difference equations; we validate its solution and score sensitivity against
 native solves on all 30 tasks. Refinement changes the numerical environment,
 rather than adding independent tasks or measuring observation-noise robustness.
+
+To test specificity to the archived seeds, we additionally evaluate the fixed
+sine policy on 100 fresh seeds (1001--1100) in each difficulty, with the original
+generator and grid settings. Every planned task is retained, including zero
+forcing and numerical failures; there are no retries or filters. This is
+validation after design selection, not a preregistered comparison or a new
+language-model experiment. We report outcomes on all 100 tasks per setting,
+with Wilson intervals and descriptive zero/nonzero-source breakdowns. Reused
+seed labels across difficulties are not pooled into independent sampling units.
 
 The comparison unit is the shared PDE seed within each difficulty, not an
 individual coefficient, solve, or confidence report. Each model has ten tasks
@@ -415,6 +431,28 @@ banded solves agree on both success thresholds at every checkpoint across all
 360 paired policy--task runs. Thus the banded implementation does not change
 these threshold comparisons, although individual numerical errors differ.
 
+\subsection{Fresh Seeds Expose the Limits of the Archive Result}
+
+Table~\ref{tab:fresh} validates the fixed sine policy on all 300 fresh tasks.
+At the minimum query budget, success is 92/100 easy, 91/100 medium, and
+98/100 hard. At full budget, it is 92/100, 85/100, and 93/100, respectively.
+All 300 executions complete without errors; no task is retried or excluded.
+Seven easy and three medium tasks have zero forcing, exactly zero solutions,
+and joint operator rank zero at both budgets. All ten fail, as predicted by the
+zero-excitation argument. Excluding them only for a descriptive breakdown,
+full-budget recovery is 92/93 easy, 85/97 medium, and 93/100 hard.
+
+\input{paper_artifacts/sine_generalization_table.tex}
+
+Thus the archived 30/30 result does not establish perfect generator-wide
+recovery. Nonzero-source failures also remain, and increasing the stored-query
+budget can reduce the number of coefficient-threshold successes in the same
+fixed policy. More rows do not guarantee lower coefficient error in an
+inconsistent finite-precision system. This validation evaluates one selected
+numerical policy; it does not determine whether adaptive policies improve
+recovery on fresh tasks. It does establish why a benchmark needs both simple
+controls and a stated treatment of unidentifiable instances.
+
 \subsection{What Numerical Reconstruction Can Establish}
 \label{sec:numerics}
 
@@ -490,7 +528,7 @@ information should not silently change the claimed ability being measured.
 Third, every truth-dependent observation must enter the information accounting,
 including diagnostics exposed as free tools.
 
-Our evidence is deliberately bounded. The archive contains 30 tasks and one
+Our evidence is deliberately bounded. The model archive contains 30 tasks and one
 scored response trajectory per model--task pair, rather than a prospective
 all-attempt study. Difficulty settings conflate dimension, scale, sparsity, and
 resolution. This spatially one-dimensional equation is mathematically an ODE
@@ -516,8 +554,9 @@ Weak-form inverse problems make parts of scientific-agent evaluation directly
 inspectable. The archived models differ in recovery and interaction behavior,
 but an interpretation in terms of experimental-design ability requires controls
 for the observation model, numerical conditioning, and information accounting.
-A fixed sine design suffices on every reconstructed task, making numerical
-baselines essential to the interpretation of model scores. The released
+A fixed sine design suffices on all 30 archive-derived tasks; fresh seeds
+reveal unidentifiable zero-excitation cases and additional numerical failures.
+Both results make numerical baselines essential to interpreting model scores. The released
 analysis provides checks for this benchmark and a concrete
 basis for designing a more controlled prospective study.
 
