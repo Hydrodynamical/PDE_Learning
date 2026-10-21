@@ -1,237 +1,180 @@
 # Can Language Models Learn a PDE?
 
-A benchmark testing whether LLMs can identify an unknown elliptic PDE by probing
-it with test functions through the weak formulation. The model receives solution
-data, a budget of queries, and diagnostic tools — but must design its own
-experimental strategy.
+**A benchmark for experimental design in scientific AI.**
 
----
+Can a language model choose informative measurements to identify an unknown
+elliptic PDE? The model selects test functions, queries weak-form integrals,
+inspects numerical diagnostics, and decides when to submit its estimate.
+Numerical tools perform coefficient recovery; the model directs the experiment.
 
-## Quick Start
+[Manuscript](paper.pdf) · [Source](paper.tex) · [Kaggle notebooks](#repository-guide) · [MIT License](LICENSE)
+
+## How it works
+
+The hidden equation is
+
+```text
+-(a(x) u'(x))' + b(x) u'(x) + c(x) u(x) = f(x),  x in [0, 1]
+u(0) = u(1) = 0.
+```
+
+The four coefficient functions are represented in a shifted Legendre basis.
+Models can inspect the solution through tools and choose test functions that
+vanish at the endpoints. Integration by parts converts each query into a
+measurement for a linear inverse problem.
+
+```mermaid
+flowchart LR
+    A[Choose a test function] --> B[Query a weak-form integral]
+    B --> C[Recover coefficients with least squares]
+    C --> D[Inspect conditioning and consistency]
+    D --> A
+    D --> E[Submit and score against hidden coefficients]
+```
+
+The benchmark records coefficient error, query efficiency, test-function
+diversity, and confidence reports. It supports comparisons of query-selection
+strategies and prompt conditions on the same seeded PDE instances.
+
+## Reproduce an offline example
+
+Use **Python 3.12** (tested locally with 3.12.12). The pinned numerical environment
+includes plotting and analysis dependencies; provider SDKs are optional.
 
 ```bash
-# Install dependencies
-pip install numpy scipy matplotlib anthropic openai google-genai
+git clone https://github.com/Hydrodynamical/PDE_Learning.git
+cd PDE_Learning
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 
-# Set your API keys
-export ANTHROPIC_API_KEY=your_key_here
-export OPENAI_API_KEY=your_key_here
-export GOOGLE_API_KEY=your_key_here
+# Run the numerical and protocol regression tests.
+python -m unittest discover -s . -p 'test_*.py' -v
 
-# Full paper benchmark (6 models × 3 difficulties × 10 seeds)
-python generate_transcripts.py \
-  --models gpt-5.4-mini gpt-5.4 gemini-3.1-pro-preview gemini-3-flash-preview claude-opus-4-6 claude-sonnet-4-20250514 \
-  --difficulties easy medium hard \
-  --seeds "1-10" \
-  --output-dir runs \
-  --no-plot
-
-# Single run (one model, one seed)
-python main_loop.py --provider google --model gemini-3-flash-preview --difficulty hard --seed 42
-
-# Test with mock LLM (no API key needed)
-python main_loop.py --mock --difficulty easy
+# Complete a scripted session: query, solve, submit, and save a dashboard.
+python main_loop.py --mock --difficulty easy --seed 42 --output-dir runs/mock
 ```
 
-Budget and turn limits are auto-scaled from difficulty — no manual tuning needed.
-All output files are saved to the current directory (override with `--output-dir`).
+On Windows, activate with `.venv\Scripts\activate` instead. The mock uses no API
+keys or provider SDKs. It checks the workflow and produces a scored prediction;
+it is **not an LLM performance result**. Add `--no-plot` for JSON only.
 
----
+The [offline workflow](.github/workflows/offline-checks.yml) runs the tests and
+example on GitHub Actions without model credentials.
 
-## The PDE
+## Run a model experiment
 
-The model must identify the coefficient functions in:
+Install the pinned provider environment and set the key for your chosen provider:
 
-```text
--(a(x) u'(x))' + b(x) u'(x) + c(x) u(x) = f(x)    on [0, 1]
-u(0) = 0,  u(1) = 0
+```bash
+python -m pip install -r requirements-api.txt
+export OPENAI_API_KEY="your-key"
+python main_loop.py --provider openai --model gpt-4o \
+  --difficulty easy --seed 42 --temperature 0 \
+  --output-dir runs/standard --no-plot
 ```
 
-Each coefficient is a linear combination of shifted Legendre polynomials.
-The number of basis functions (and thus unknowns) scales with difficulty.
+`--provider` also accepts `anthropic` and `google`, using `ANTHROPIC_API_KEY` and
+`GOOGLE_API_KEY`, respectively. Pass the desired model ID explicitly; availability
+and behavior depend on the provider. The seed fixes the PDE instance, not the
+provider's responses. Temperature zero does not guarantee identical API output;
+the OpenAI backend omits temperature when a reasoning-effort override is used.
 
----
+The **standard** condition adds an initial hint about unequal coefficient
+identifiability. `--baseline` omits that hint. Both conditions retain the same
+PDE, tool instructions, and protocol.
 
-## Tools Available to the Model
+### Compare multiple seeds
 
-| Command | Returns | Cost |
-| --- | --- | --- |
-| `QUERY: <expression>` | ∫f·φ dx | 1 query |
-| `COMPUTE: eval_solution x1 x2 ...` | u(x) and u'(x) at given points | free |
-| `COMPUTE: term_integrals <expr>` | All three term weights at once: ∫u'φ' dx (diffusion), ∫u'φ dx (advection), ∫uφ dx (reaction) | free |
-| `COMPUTE: solve` | Least-squares coefficient recovery + delta from previous solve | free |
-| `COMPUTE: check <expression>` | Predicted LHS vs actual ∫fφ dx for a new test function | free |
-| `PREDICT:` | End session and submit last `COMPUTE: solve` coefficients as answer | — |
+For example, run one registered model on three difficulties and two seeds:
 
-`COMPUTE: solve` shows per-coefficient change from the previous solve, so the
-model can tell when its estimates have converged.
+```bash
+python generate_transcripts.py --models gpt-4o \
+  --difficulties easy medium hard --seeds "42 137" \
+  --output-dir runs/standard --no-plot
 
-`COMPUTE: term_integrals` returns all three weights in a single call, making it
-easy to screen candidate test functions for reaction-term informativeness before
-spending a query.
-
-`COMPUTE: check` is a free consistency diagnostic. It compares the predicted
-LHS (from current â, b̂, ĉ estimates) against the actual ∫fφ dx for a new test
-function. Zero discrepancy does NOT confirm correctness — it only means this test
-function is consistent with the current fit. Unlike QUERY, check is read-only: it
-does not add the test function to the solver's equation system.
-
----
-
-## Difficulty Levels
-
-Budget and turn limits are derived automatically. Override with `--max-queries` and `--max-turns`.
-
-| Difficulty | Basis size | Unknowns | Auto budget | Auto turns |
-| --- | --- | --- | --- | --- |
-| `easy`    | 2 | 8 | 12 | 36 |
-| `medium`  | 3 | 12 | 18 | 54 |
-| `hard`    | 4 | 16 | 24 | 72 |
-| `extreme` | 8 | 32 | 48 | 144 |
-
----
-
-## Output Files
-
-Each run produces three co-indexed files sharing a common stem:
-
-```
-run_<difficulty>_s<seed>_<model>_<timestamp>.json
-run_<difficulty>_s<seed>_<model>_<timestamp>_dashboard.png
-run_<difficulty>_s<seed>_<model>_<timestamp>_auc.png
+# Repeat the same selection with the baseline prompt.
+python generate_transcripts.py --models gpt-4o \
+  --difficulties easy medium hard --seeds "42 137" --baseline \
+  --output-dir runs/baseline --no-plot
 ```
 
-The JSON log contains: full turn transcript, per-query records, per-solve
-coefficient estimates and errors vs ground truth, verifications, term integrals,
-efficiency error curves, final scores, ground truth, behavioral metrics, and
-metacognitive metrics.
+Each invocation above attempts six runs. The runner's defaults attempt
+**18 standard-condition runs**: three models, three difficulties, and two seeds.
+They do not automatically include a baseline ablation. See `MODELS` in
+[generate_transcripts.py](generate_transcripts.py) for the registered model IDs.
 
-**Behavioral metrics** (in `behavioral_metrics`):
+To resume a sweep, repeat its arguments with `--retry-failed`. Matching includes
+model, difficulty, seed, prompt condition, temperature, and reasoning effort.
+Legacy summaries missing these settings are preserved and rerun. Use separate
+output directories for different conditions/settings so downstream plots and
+aggregate tables compare like with like.
 
-| Field | Description |
+## Protocol and outputs
+
+| Difficulty | Basis size per coefficient | Total coefficients | Query budget | Turn limit |
+| --- | ---: | ---: | ---: | ---: |
+| Easy | 2 | 8 | 12 | 36 |
+| Medium | 3 | 12 | 18 | 54 |
+| Hard | 4 | 16 | 24 | 72 |
+| Extreme | 8 | 32 | 48 | 144 |
+
+Single-run limits can be overridden with `--max-queries` and `--max-turns`.
+
+| Command | Role |
 | --- | --- |
-| `learning_rate` | Slope of log₁₀(error) vs query count across solves (negative = improving) |
-| `improvement_ratio` | First-solve error / last-solve error (> 1 means within-session learning) |
-| `wasted_turns` / `wasted_turn_fraction` | Turns with no recognized action (malformed commands or pure reasoning) |
-| `max_unproductive_streak` | Longest consecutive run of wasted turns |
-| `tail_after_last_solve` | Turns between final solve and session end |
-| `max_gap_without_progress` | Longest stretch without a QUERY or COMPUTE: solve after the first solve |
-| `duplicate_queries` | Count of repeated test functions (working memory failures) |
-| `family_entropy` / `family_entropy_normalized` | Shannon entropy of test function family distribution (0 = all one family) |
-| `family_counts` | Per-family query counts (polynomial, trigonometric, exponential, localized, other) |
-| `query_space_blocks` | Per-block SVD analysis: effective rank, log-volume, condition number for diffusion/advection/reaction blocks |
-| `mean_monitoring_accuracy` | Mean Spearman correlation between stated and true uncertainty rankings ($\bar{M}$) |
-| `mean_control_efficiency` | Mean fraction of information gain on the most uncertain coefficient ($\bar{C}$) |
-| `n_confidence_reports` | Number of times the model reported per-coefficient confidence |
+| `QUERY: <expression>` | Measure the source integral; costs one query. |
+| `COMPUTE: eval_solution <points>` | Inspect the solution and its derivative. |
+| `COMPUTE: term_integrals <expression>` | Inspect diffusion, advection, and reaction weights. |
+| `COMPUTE: solve` | Recover coefficients from accumulated queries using least squares. |
+| `COMPUTE: check <expression>` | Check consistency against a new test function without adding a query. |
+| `PREDICT:` | Submit the latest solve coefficients. |
 
-Use `--output-dir runs/` to collect logs from multiple runs in one place.
+A small consistency residual alone does not establish coefficient recovery:
+ill-conditioned measurements can fit well while identifying coefficients poorly.
 
----
+Every completed invocation writes a timestamped `run_*.json` with configuration,
+transcripts, queries, solves, ground truth, and available scores/diagnostics.
+Single runs also attempt a dashboard after a prediction; batch runs attempt a
+dashboard and AUC plot. `--no-plot` disables plot generation. Batch summaries are
+saved to `sweep_results.json`. `--save-transcript` and `--save-plot` take explicit
+paths, independently of `--output-dir`.
 
-## CLI Reference
+For a reproducible experiment record, retain the JSON logs, exact command,
+`git rev-parse HEAD`, and `python -m pip freeze` alongside your analysis.
 
-### `generate_transcripts.py` — batch sweep
+## Results and evidence status
 
-```
-python generate_transcripts.py [options]
+This repository contains several historical experiment artifacts with different
+scopes:
 
-  --models MODEL [MODEL ...]        Models to run (must be in MODELS registry)
-  --difficulties {easy,medium,hard,extreme} [...]
-  --seeds SEEDS                     Space-separated or range: "42 137" or "1-10"
-  --output-dir DIR                  Output directory (default: runs/)
-  --no-plot                         Skip PNG generation (JSON only)
-  --retry-failed                    Re-run only seeds missing from sweep_results.json
-  --temperature FLOAT               Sampling temperature (default: 0.0)
-  --reasoning-effort LEVEL          Override reasoning effort for OpenAI models
-```
+- The manuscript's preliminary comparison lists **18 attempts / 15 scored runs**
+  across three OpenAI models, three difficulties, and seeds 42 and 137.
+- Checked-in success-rate figures are labeled **180 scored runs across six
+  models**, with ten runs per model/difficulty combination. This is a different
+  design from the manuscript's proposed five-seed, two-prompt study.
+- Saved Kaggle notebook outputs contain additional exploratory runs under their
+  own settings.
 
-### `main_loop.py` — single run
+The complete per-run JSON archive behind those tables and figures is **not
+bundled**, so their aggregates cannot currently be regenerated from a fresh
+checkout. The manuscript's six-model, five-seed, two-prompt protocol is a proposed
+expansion, not a completed result established here. Historical numerical tables
+are preserved; no new provider benchmark was run for this reproducibility update.
+The previous README's single-seed, 28-query example is omitted because its source
+logs and exact settings are unavailable and it exceeds the current default hard
+budget of 24 queries.
 
-```text
-python main_loop.py [options]
+## Repository guide
 
-Core options:
-  --difficulty {easy,medium,hard,extreme}   Problem difficulty (default: medium)
-  --seed INT                                Random seed (default: 42)
-  --provider {anthropic,openai,google}      LLM provider (default: anthropic)
-  --model MODEL                             Model name
-  --temperature FLOAT                       Sampling temperature (default: 0.0)
-
-Budget overrides (auto-scaled by default):
-  --max-queries INT                         Query budget
-  --max-turns INT                           Max conversation turns (default: 3× budget)
-  --min-queries INT                         Min queries before PREDICT is allowed
-
-Output:
-  --output-dir DIR                          Directory for JSON and PNG output (default: .)
-  --save-transcript FILE                    Also save full transcript as plain text
-  --no-plot                                 Skip PNG generation
-
-Testing:
-  --mock                                    Use scripted mock LLM (no API key needed)
-  --baseline                                Minimal prompt (no mathematical context)
-```
-
----
-
-## Results (Seed 42, Hard Difficulty)
-
-| Metric | Baseline | Standard |
-| --- | --- | --- |
-| Total coefficient error | 2.2742 | **0.0085** |
-| a(x) error | 0.0659 | 0.0001 |
-| b(x) error | 1.2281 | 0.0012 |
-| c(x) error | 0.9803 | 0.0072 |
-| f(x) error | 0.0000 | 0.0000 |
-| Queries used | 28 | 28 |
-| Test function diversity | 25 polynomial | 6 poly, 19 trig |
-
-The baseline used all polynomials — x^k(1-x)^m — which are nearly collinear in
-the weak-form integral space. The standard prompt model used a mix of sines and
-polynomials, giving a well-conditioned overdetermined system.
-
----
-
-## File Structure
-
-### Main entry points
-
-| File | Description |
-|---|---|
-| `main_loop.py` | **Primary entry point.** Probe-only benchmark with Anthropic/OpenAI/Google support, auto-scaled budget, convergence delta tracking, and full JSON logging. |
-| `kaggle.py` | Kaggle Benchmarks notebook adapter. Uses `dispatch_turn()` from main_loop.py with kbench's `llm.prompt()` interface. |
-| `probe_loop.py` | Earlier version of main_loop.py (without convergence deltas). |
-| `llm_loop.py` | Legacy variant supporting DECOMPOSE commands and auto-progress feedback. Uses `interactive.py`. |
-
-### Core library (imported by main entry points)
-
-| File | Description |
-|---|---|
-| `pde.py` | PDE generation and numerical solving |
-| `basis.py` | Shifted Legendre polynomial basis |
-| `weak_form.py` | Weak-form integral computation |
-| `expression_parser.py` | Symbolic test function parsing |
-| `benchmark.py` | Scoring and evaluation |
-| `diagnostics.py` | Result plotting |
-| `interactive.py` | Session manager (used only by `llm_loop.py`) |
-
-### Standalone scripts (not imported by main entry points)
-
-| File | Description |
-|---|---|
-| `generate_transcripts.py` | Batch runner for multi-seed experiments |
-| `analyze_adaptation.py` | Post-hoc analysis of LLM reasoning patterns |
-| `oracle_decompose.py` | Reference oracle implementation |
-| `demo.py` / `demo_benchmark.py` / `demo_full.py` | Example scripts |
-| `test_basis.py` / `test_functions.py` / `test_interactive.py` / `test_parser.py` / `test_weak_form.py` | Unit tests |
-
----
-
-## Requirements
-
-- Python 3.10+
-- `numpy`, `scipy`, `matplotlib`
-- `anthropic` (for Anthropic models) — `pip install anthropic`
-- `openai` (for OpenAI models) — `pip install openai`
-- `google-genai` (for Google models) — `pip install google-genai`
-- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and/or `GOOGLE_API_KEY` environment variables
+| Path | Contents |
+| --- | --- |
+| [main_loop.py](main_loop.py) | Active single-session CLI, tools, prompts, and backends |
+| [generate_transcripts.py](generate_transcripts.py) | Batch experiments, summaries, and resumption |
+| `basis.py`, `pde.py`, `weak_form.py` | Numerical problem generation and weak-form operations |
+| `expression_parser.py`, `sanitize_expression.py` | Test-function parsing and normalization |
+| `benchmark.py`, `diagnostics.py` | Scoring and dashboards |
+| `replot.py`, `plot_*.py`, `verify_metacognition.py` | Analysis of saved run logs |
+| [kaggle-benchmark.ipynb](kaggle-benchmark.ipynb), [kaggle.ipynb](kaggle.ipynb) | Kaggle-specific exploratory notebooks; require their own Kaggle environment |
+| `test_basis.py`, `test_weak_form.py`, `test_parser.py`, `test_cli.py`, `test_sweep.py` | Offline numerical, protocol, and workflow tests |
+| [archive/](archive/) | Historical demos and earlier interfaces; outside the supported quick start |

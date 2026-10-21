@@ -1,0 +1,27 @@
+name: Offline reproducibility
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install numerical environment
+        run: python -m pip install -r requirements.txt
+      - name: Test numerical core, parser, and CLI workflows
+        run: python -m unittest discover -s . -p 'test_*.py' -v
+      - name: Generate an offline example with its dashboard
+        run: python main_loop.py --mock --difficulty easy --seed 42 --output-dir runs/ci-smoke

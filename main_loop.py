@@ -698,21 +698,22 @@ class GeminiBackend:
 
 
 class MockBackend:
-    """Simple mock that queries a few test functions then predicts zeros."""
-    def __init__(self):
+    """Scripted offline workflow check, not a model-performance baseline."""
+    def __init__(self, n_queries: int = 8):
         self.model = "mock"
         self.call_count = 0
         self.script = [
             "COMPUTE: eval_solution 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9",
-            "QUERY: sin(pi*x)",
-            "QUERY: sin(2*pi*x)",
-            "QUERY: sin(3*pi*x)",
-            "QUERY: x*(1-x)",
-            "QUERY: x*(1-x)*(2*x-1)",
-            "QUERY: x**2*(1-x)**2",
-            "QUERY: x*(1-x)*sin(pi*x)",
-            "PREDICT:\na_coeffs = [1.0, 0.0, 0.0]\nb_coeffs = [0.0, 0.0, 0.0]\nc_coeffs = [0.0, 0.0, 0.0]\nf_coeffs = [0.0, 0.0, 0.0]",
         ]
+        for index in range(n_queries):
+            mode = index // 2 + 1
+            expression = (f"sin({mode}*pi*x)" if index % 2 == 0
+                          else f"x*(1-x)*exp(-{mode}*x)")
+            self.script.append(f"QUERY: {expression}")
+        self.script.extend([
+            "COMPUTE: solve",
+            "PREDICT:\nConfidence: a=0%, b=0%, c=0%, f=0%",
+        ])
 
     def chat(self, system, messages):
         idx = min(self.call_count, len(self.script) - 1)
@@ -1525,12 +1526,12 @@ def main():
     parser.add_argument("--model", default=None,
                         help="Model name (default: claude-haiku-4-5-20251001 for anthropic, gpt-4o for openai)")
     parser.add_argument("--max-turns", type=int, default=None,
-                        help="Override auto-scaled turn limit (default: 2x budget)")
+                        help="Override auto-scaled turn limit (default: 3x budget)")
     parser.add_argument("--save-transcript", type=str, default=None)
     parser.add_argument("--save-plot", type=str, default=None,
-                        help="Save results plot to file (default: probe_<difficulty>_<seed>.png)")
+                        help="Save dashboard to this path (default: alongside the timestamped JSON)")
     parser.add_argument("--baseline", action="store_true",
-                        help="Use minimal prompt without mathematical context (for ablation)")
+                        help="Omit the initial identifiability hint (shared PDE/tool instructions remain)")
     parser.add_argument("--reasoning-effort", type=str, default=None,
                         choices=["none", "low", "medium", "high", "xhigh"],
                         help="Reasoning effort for OpenAI GPT-5+ models "
@@ -1542,7 +1543,7 @@ def main():
     parser.add_argument("--no-plot", action="store_true",
                         help="Skip generating dashboard PNG (JSON only)")
     parser.add_argument("--temperature", type=float, default=0.0,
-                        help="LLM sampling temperature (0 = deterministic)")
+                        help="Requested LLM sampling temperature; API responses may vary")
     args = parser.parse_args()
 
     if args.model is None:
@@ -1553,12 +1554,19 @@ def main():
     config = DIFFICULTY_CONFIG[args.difficulty]
     max_queries = args.max_queries if args.max_queries is not None else config["budget"]
     max_turns = args.max_turns if args.max_turns is not None else 3 * max_queries
+    if max_queries <= 0 or max_turns <= 0:
+        parser.error("--max-queries and --max-turns must be positive")
+    mock_queries = max(config["unknowns"], args.min_queries or 0)
+    if args.mock and (max_queries < mock_queries or max_turns < mock_queries + 3):
+        parser.error(f"--mock needs at least {mock_queries} queries and {mock_queries + 3} turns")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
     session = ProbeSession.from_difficulty(args.difficulty, args.seed, max_queries)
     if args.mock:
-        backend = MockBackend()
+        backend = MockBackend(n_queries=mock_queries)
+        args.model = "mock"
+        args.provider = "mock"
     elif args.provider == "openai":
         backend = OpenAIBackend(model=args.model, reasoning_effort=args.reasoning_effort,
                                 temperature=args.temperature)
@@ -1580,6 +1588,8 @@ def main():
             "budget_source": "override" if args.max_queries is not None else "auto",
             "prompt_condition": "baseline" if args.baseline else "standard",
             "reasoning_effort": args.reasoning_effort,
+            "temperature": args.temperature,
+            "min_queries": args.min_queries,
             "timestamp": datetime.now().isoformat(),
         },
         "turns": [],
@@ -1699,7 +1709,7 @@ def main():
     re_tag = f"_re{args.reasoning_effort}" if args.reasoning_effort else ""
     run_stem = (
         f"run_{args.difficulty}_s{args.seed}_{model_slug}{re_tag}"
-        f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        f"_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
     )
     log_path = os.path.join(args.output_dir, run_stem + ".json")
     with open(log_path, "w") as f:
