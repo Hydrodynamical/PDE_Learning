@@ -1,257 +1,596 @@
-\documentclass[11pt]{article}
-
+\documentclass{article}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage[margin=1in]{geometry}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{booktabs,tabularx}
-\usepackage[numbers,sort&compress]{natbib}
-\usepackage{graphicx}
-\usepackage{caption}
-\usepackage[section]{placeins}
-\usepackage{microtype}
-\usepackage{xcolor}
-\usepackage{enumitem}
+\usepackage{microtype,graphicx,booktabs,tabularx}
+\usepackage{xurl}
 \usepackage{hyperref}
-\hypersetup{colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,urlcolor=blue!55!black}
-\captionsetup{font=small,labelfont=bf}
-\setlist{nosep}
-\setlength{\emergencystretch}{2em}
+\usepackage[preprint]{icml2026}
+\hypersetup{pdfsubject={Research preprint on scientific-agent evaluation}}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{placeins}
 \newcommand{\dd}{\,\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
-\newtheorem{remark}{Remark}
-
-\title{\textbf{Can Language Models Learn a PDE?}\\[5pt]
-\large An Interactive Benchmark for Experimental Design\\
-in Weak-Form Coefficient Identification}
-\author{Joseph K. Miller\\
-\small Department of Mathematics, Massachusetts Institute of Technology}
-\date{\small Experiments: April 2026 \qquad Revised: October 2026}
+\newcommand{\Poly}{\mathcal{P}}
+\newtheorem{proposition}{Proposition}
+\icmltitlerunning{Can Language Models Learn a PDE? An Audit of Measurement Selection}
+\icmlkeywords{scientific agents, experimental design, inverse problems, language model evaluation}
 
 \begin{document}
-\maketitle
+\twocolumn[
+\icmltitle{Can Language Models Learn a PDE?\texorpdfstring{\\}{ }
+An Audit of Measurement Selection in Weak-Form Inverse Problems}
+\begin{icmlauthorlist}
+\icmlauthor{Joseph K. Miller}{mit}
+\end{icmlauthorlist}
+\icmlaffiliation{mit}{Department of Mathematics, Massachusetts Institute of Technology, Cambridge, MA, USA}
+\icmlcorrespondingauthor{Joseph K. Miller}{jkm314@mit.edu}
+\vskip 0.3in
+]
+\printAffiliationsAndNotice{}
 
 \begin{abstract}
-We introduce an interactive benchmark in which language models choose measurements
-to identify the coefficients of a one-dimensional elliptic equation. The environment
-provides access to a numerical solution, budgeted weak-form queries, and free
-diagnostic tools. Numerical linear algebra is delegated to a solver; the model
-selects test functions, interprets feedback, and decides when to submit.
-We reanalyze a public archive of 180 scored runs from six models, three difficulty
-levels, and ten shared problem seeds per configuration. Recovery rates vary
-substantially across models and instances, while action counts, within-session
-improvement, query-family diversity, and confidence reports reveal differences
-beyond the final error. We regenerate the figures from the archived logs and
-correct a stale success count in a previously checked-in figure.
-The diagnostics describe observable behavior rather than validated cognitive
-faculties. We also distinguish numerical conditioning from structural
-identifiability: a single solution need not uniquely determine the operator, even
-within the benchmark's finite-dimensional coefficient class. The archive and
-reproduction script support verification of the reported aggregates; incomplete
-attempt histories and provider settings limit broader comparisons.
+Interactive scientific benchmarks aim to measure how language models choose
+experiments, but recovery scores also depend on the observation model and
+numerical implementation.
+We audit a weak-form inverse-problem benchmark using 180 archived scored runs
+from six models on 30 shared elliptic-equation instances, paired statistical
+comparisons, and new numerical controls kept distinct from historical outcomes.
+A fixed sine-query design recovers all 30 reconstructed tasks at the strict
+error threshold using the protocol's minimum solve budget, so these tasks do
+not establish a benefit from adaptive language-model measurement selection.
+Free consistency checks supply additional observations, while absolute rounding
+and small singular values make recovery sensitive to numerical representation.
+An exact nonuniqueness result further shows why full floating-point matrix rank
+cannot establish structural identifiability.
+The audit provides reproducible diagnostics for separating observable agent
+behavior from claims about experimental-design ability.
 \end{abstract}
 
 \section{Introduction}
 
-An experiment can be difficult because the available measurements are poorly
-chosen, even when the computations following those measurements are routine.
-This distinction motivates a benchmark in which a language model directs an
-inverse-problem investigation. It can request measurements, inspect coefficient
-estimates, test consistency, and revise its choices. The computational tools
-perform integration and least-squares recovery, leaving measurement selection and
-the use of feedback as the model's main responsibilities.
+A scientific agent must choose observations that distinguish plausible
+explanations. A benchmark can make this process inspectable by placing the agent
+in a known inverse problem: the hidden parameters are available to the evaluator,
+the measurement actions have mathematical definitions, and the tools expose the
+information used by the agent. However, a high recovery score can also reflect
+properties of the numerical environment. Before interpreting the score as
+experimental-design ability, we must understand which parameters the observations
+identify and how numerical error affects their recovery.
 
-The task builds on the weak formulation of an elliptic boundary value
-problem \citep{evans2010pde}. It also connects to active data selection
-\citep{mackay1992information}: the informative value of a measurement depends on
-the measurements already collected. A small residual does not necessarily imply
-accurate coefficients, and visibly different test functions need not add
-independent constraints. These features provide concrete opportunities to study
-how models respond to numerical evidence.
+We investigate a benchmark in which a language model identifies the coefficients
+of an elliptic differential equation by selecting weak-form test functions.
+The solver handles quadrature and least squares; the agent chooses measurements,
+inspects estimates, and decides when to stop. The setup is deliberately small
+and instrumented. Unlike an open-ended discovery task, it permits direct analysis
+of the joint measurement matrix and an exact specification of the correctness
+event. ``Learn'' in the title means identification within an interaction, rather
+than updating model weights or discovering an unknown equation family.
 
-The benchmark was introduced in a Kaggle write-up \citep{kaggle2026pde}, with
-behavioral interpretations motivated by the cognitive framework of
-\citet{burnell2026cognitive}. Here we organize the task around three contributions:
-an instrumented interface for tool-assisted coefficient identification;
-a reproducible descriptive analysis of 180 archived scored runs; and an account
-of the numerical and interpretive limits of that analysis. The question in the
-title concerns identification during a session, not training model weights.
-The behavioral measurements are hypotheses about useful aspects of scientific
-problem solving, not independent validation of general cognitive abilities.
+The benchmark first appeared in a Kaggle write-up \citep{kaggle2026pde}.
+This paper reexamines its public six-model archive rather than treating the
+original behavioral labels as established cognitive measurements.
+We ask three questions: (i) how do the archived policies differ on shared tasks;
+(ii) what recovery is possible with simple numerical query policies; and
+(iii) which aspects of the protocol and discretization constrain the interpretation
+of those comparisons?
 
-\section{Task and numerical interface}
+Our contributions are an auditable formulation of the measurement task; a
+reproducible analysis of 180 scored records with comparisons paired by problem
+instance; and new controls that expose the distinction between structural
+nonuniqueness, numerical conditioning, and measured agent behavior.
+An exact polynomial-family result gives a concrete failure of unconditional
+identifiability. Reconstructed measurements then quantify numerical and protocol
+effects on the actual archived tasks. The fixed sine control succeeds on every reconstructed task, so the archived
+results do not establish a benefit from adaptive language-model measurement
+selection. The broader contribution is a case study of how omitted numerical
+controls can change a scientific-agent benchmark's interpretation.
+
+\section{Related Work}
+
+\paragraph{Interactive scientific agents.}
+DiscoveryWorld evaluates a broad scientific-discovery loop in simulated worlds
+\citep{jansen2024discoveryworld}. BoxingGym studies automated experimental design
+and model discovery across generative environments
+\citep{gandhi2025boxinggym}. SciGym provides a systems-biology dry lab for
+scientific-agent evaluation \citep{duan2025scigym}. Our task shares their
+sequential observation--feedback structure. Its narrower contribution is a
+finite-dimensional weak-form inverse problem in which the measurement matrix,
+coefficient truth, and numerical sensitivities can be audited directly. We do
+not claim to introduce interactive scientific evaluation itself.
+
+\paragraph{Equation discovery and inverse problems.}
+LLM-SR uses language models for scientific equation discovery, and LLM-SRBench
+evaluates discovery from observations \citep{shojaee2025llmsr,shojaee2025llmsrbench}.
+Weak SINDy uses integral formulations for PDE identification
+\citep{messenger2021wsindy}. Here the operator family and polynomial basis are
+known, and the agent chooses test functions while a supplied solver estimates
+coefficients. This is a measurement-selection problem within a specified model,
+rather than symbolic structure discovery. Optimal experimental design provides
+a relevant reference \citep{mackay1992information,alexanderian2021oed}, but its
+criteria require an explicit noise model, admissible designs, and appropriate
+rank assumptions. We do not equate expression-family diversity with information
+gain.
+
+\paragraph{Identifiability and confidence.}
+Identifiability depends on the observation operator. Results for boundary maps,
+reaction--advection--diffusion processes, and parabolic observations
+\citep{egger2014simultaneous,browning2024structural,browning2025parabolic}
+do not by themselves guarantee uniqueness from one stationary solution and
+source. Our analysis distinguishes this structural issue from finite-grid
+conditioning. The confidence analysis uses an explicit coefficient-error event,
+following the distinction between stated confidence and empirical accuracy
+\citep{guo2017calibration}. The cognitive framework of \citet{burnell2026cognitive} contextualizes the
+original behavioral labels; our diagnostics describe behavior under a specific
+prompted protocol.
+
+\section{Benchmark and Observation Model}
 \label{sec:task}
 
-\subsection{Hidden equation and measurement system}
+\subsection{Hidden Equation and Linear Recovery}
 
 The hidden boundary value problem is
 \begin{equation}
-  -(a(x)u'(x))'+b(x)u'(x)+c(x)u(x)=f(x),\qquad x\in[0,1],
-  \quad u(0)=u(1)=0.
-  \label{eq:pde}
+ \begin{gathered}-(au')'+bu'+cu=f,\quad x\in[0,1],\\ u(0)=u(1)=0.\end{gathered}
+ \label{eq:pde}
 \end{equation}
-Each coefficient \(q\in\{a,b,c,f\}\) is represented by
-\(q(x)=\sum_{j=0}^{N-1}\theta_{q,j}P_j(x)\), where \(P_j\) denotes the
-ordinary shifted Legendre polynomial on \([0,1]\). These polynomials are
-orthogonal, but are not normalized to have unit \(L^2\) norm.
-The environment samples the coefficients and computes a numerical solution.
-The model accesses \(u\) and \(u'\) through an evaluation tool.
-
-For a test function \(\varphi_k\) vanishing at both endpoints, integration by
-parts gives
+Each field \(q\in\{a,b,c,f\}\) has the form
+\(q(x)=\sum_{j=0}^{N-1}\theta_{q,j}P_j(x)\), using ordinary shifted Legendre
+polynomials on \([0,1]\). The polynomials are orthogonal but not orthonormal.
+The generator samples coefficients and computes \(u\) numerically.
+For an admissible test function \(\varphi_k\) vanishing at the endpoints,
 \begin{equation}
- \int_0^1 au'\varphi_k'\dd x+
- \int_0^1 bu'\varphi_k\dd x+
- \int_0^1 cu\varphi_k\dd x
- =r_k,\qquad
- r_k=\int_0^1 f\varphi_k\dd x.
+ \begin{aligned}&\int au'\varphi_k'\dd x+\int bu'\varphi_k\dd x+\int cu\varphi_k\dd x\\ &\qquad =r_k,\qquad r_k=\int f\varphi_k\dd x.\end{aligned}
  \label{eq:weak}
 \end{equation}
-Define the basis-weighted matrices
+All integrals are over \([0,1]\). Define
 \begin{align}
- D_{kj}&=\int_0^1P_j u'\varphi_k'\dd x,&
- B_{kj}&=\int_0^1P_j u'\varphi_k\dd x,\nonumber\\
- C_{kj}&=\int_0^1P_j u\varphi_k\dd x,&
- F_{kj}&=\int_0^1P_j\varphi_k\dd x.
+ D_{kj}&=\int P_j u'\varphi_k'\dd x,& B_{kj}&=\int P_j u'\varphi_k\dd x,\nonumber\\
+ C_{kj}&=\int P_j u\varphi_k\dd x,& F_{kj}&=\int P_j\varphi_k\dd x.
  \label{eq:matrices}
 \end{align}
-After \(K\) queries, the solver separately minimizes
-\(\|A\theta-r\|_2\), with \(A=[D\mid B\mid C]\in\R^{K\times3N}\),
-and \(\|F\theta_f-r\|_2\).
-The model chooses measurements; it does not supply its own least-squares
-implementation. The interface requires at least \(4N\) stored queries before
-solving. This is a protocol rule, not a guarantee of rank or uniqueness.
+The tool separately minimizes \(\|A\theta-r\|_2\) for the operator, where
+\(A=[D\mid B\mid C]\in\R^{K\times3N}\), and \(\|F\theta_f-r\|_2\) for
+the source. Although the prompt describes \(4N\) unknown coefficients, the
+returned source moments already provide the right-hand side of the operator
+system. The requirement of \(K\ge4N\) before solving is a protocol rule,
+rather than a rank guarantee.
 
-\subsection{Actions and budgets}
+\subsection{Actions, Information, and Budgets}
+
+Table~\ref{tab:tools} summarizes the interface. The model can evaluate the
+solution and its numerical derivative, choose symbolic expressions, inspect
+estimates, and request consistency checks. The parser admits mathematical
+expressions including polynomial, trigonometric, exponential, and localized
+functions, subject to endpoint and validity checks. It does not impose a common
+amplitude normalization.
 
 \begin{table}[t]
-\centering
-\caption{Actions available in a session. Only stored queries consume the query
-budget; multiple commands may share a response within a finite turn limit. A free consistency check supplies
-a measurement but does not append a row to the solve system.}
+\caption{Session actions. Only accepted stored queries consume the query budget.
+Free checks reveal a source moment without adding a solver row.}
 \label{tab:tools}
-\small
-\begin{tabularx}{\linewidth}{@{}lX@{}}
+\centering\small
+\begin{tabularx}{\columnwidth}{@{}lX@{}}
 \toprule
-Action & Function\\
+Action & Returned information or effect\\
 \midrule
-\texttt{eval\_solution} & Evaluate \(u\) and its numerical derivative at chosen points.\\
-\texttt{QUERY} & Return \(r_k\) and store the corresponding rows of \(A\) and \(F\).\\
-\texttt{term\_integrals} & Inspect the three unweighted terms \(\int u'\varphi'\),
- \(\int u'\varphi\), and \(\int u\varphi\) before querying.\\
-\texttt{solve} & Recover coefficient vectors and report changes from the previous solve.\\
-\texttt{check} & Compare a candidate weak-form measurement with the current estimate.\\
-\texttt{PREDICT} & Submit the coefficient vectors from the most recent solve.\\
+\texttt{eval\_solution} & Values of \(u,u'\) at chosen points.\\
+\texttt{QUERY} & \(r_k\); appends rows to \(A,F\).\\
+\texttt{term\_integrals} & The three unweighted integrals with \(P_0=1\).\\
+\texttt{solve} & Least-squares coefficient estimates and changes.\\
+\texttt{check} & Predicted weak left-hand side and actual source moment for a candidate expression.\\
+\texttt{PREDICT} & Submits the latest solve coefficients.\\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-The protocol permits one stored query per response and prevents submission in the
-same response as a query. Tool calls and reasoning share a finite turn budget.
-The common instructions encourage repeated solves and ask for coefficient-wise
-confidence reports after solving. Consequently, iteration counts reflect behavior
-under an explicit instruction to iterate.
+The protocol permits at most one stored query per response; several free
+commands can share a response. Submission cannot share a response with a query.
+The prompt encourages repeated solves and requests confidence reports. Therefore
+solve counts and iteration are behaviors under an instruction to iterate.
+A query budget counts stored rows, not all observations: a free check returns
+\(\int f\varphi\) for a new expression, and solution evaluations are also free.
 
 \begin{table}[t]
-\centering
-\caption{Settings recorded in the recovered six-model archive.
-Each row contains ten problem seeds per model.}
+\caption{Reconstructed task settings. The archive records \(N\), query and turn
+budgets. Generator parameters are verified by exact recovery of all 30 archived
+coefficient vectors. Sparsity is the generator's zeroing parameter; scale and
+basis dimension change together.}
 \label{tab:difficulty}
-\begin{tabular}{@{}lrrrr@{}}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
 \toprule
-Difficulty & \(N\) & Total coefficients & Queries & Turns\\
+ & Easy & Medium & Hard\\
 \midrule
-Easy & 2 & 8 & 12 & 36\\
-Medium & 3 & 12 & 18 & 54\\
-Hard & 4 & 16 & 24 & 72\\
+\(N\) & 2 & 3 & 4\\
+Stored-query budget & 12 & 18 & 24\\
+Turn limit & 36 & 54 & 72\\
+Generator sparsity & .3 & .2 & .1\\
+Generator scale & .5 & 1.0 & 1.5\\
+Diffusion parameter \(a_{\min}\) & 1.0 & .5 & .3\\
+Solution grid points & 2001 & 2001 & 4001\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All archived runs record the \texttt{standard} prompt condition. The write-up calls
-this the enhanced condition: it adds an initial hint about unequal coefficient
-identifiability. Both prompt variants retain the same equation, tools, and
-protocol. The recovered archive does not support a baseline-versus-standard
-ablation. Its logged basis sizes are \(2,3,4\), correcting the write-up's
-\(3,5,8\) description.
+The reference implementation uses second-order finite differences for the
+solution, a fourth-order interior derivative with boundary stencils, and
+composite Simpson quadrature on the solution grid. It rounds each stored matrix
+entry and right-hand-side value to 12 decimal places. The solve uses unweighted
+least squares. The model sees coefficients rounded to eight decimal places;
+final scoring uses the internally retained unrounded estimate. Symbolic test
+functions are differentiated by a fourth-order centered stencil with step
+\(10^{-6}\), independently of the solution-grid spacing.
+These choices matter when singular values are small. Table~\ref{tab:difficulty}
+also shows that the three difficulty labels are bundled settings; differences
+cannot be attributed solely to dimension.
 
-\section{Recovery, conditioning, and identifiability}
+\subsection{Error and Identifiability}
 \label{sec:identifiability}
 
-For each coefficient block, the reported error is the absolute maximum
-coefficient deviation,
+For each field, the scoring event uses maximum absolute coefficient deviation:
 \begin{equation}
- E_q=\max_{0\leq j<N}|\widehat\theta_{q,j}-\theta_{q,j}|,
- \qquad E=E_a+E_b+E_c+E_f.
+ E_q=\max_j|\widehat\theta_{q,j}-\theta_{q,j}|,\qquad
+ E=\sum_{q\in\{a,b,c,f\}}E_q.
  \label{eq:error}
 \end{equation}
-The main success threshold is \(E<0.01\), with \(E<0.1\) reported as a
-sensitivity check. These thresholds match the archived scoring and plotting code.
-They are not thresholds on function error at held-out spatial points, as stated
-in the original write-up. The scorer separately evaluates function errors on a
-500-point grid. Since \(|P_j(x)|\leq1\), the total function error is bounded above
-by \(NE\), but coefficient and function thresholds of the same numerical value
-are not equivalent.
+Our primary threshold is \(E<0.01\); \(E<0.1\) is a sensitivity analysis.
+These are not function-error thresholds on held-out points. The separately
+reported function error is bounded by \(NE\), since \(|P_j(x)|\le1\), but
+equal numerical thresholds are not equivalent.
 
-Recoverability depends on the joint design matrix \(A\), not only on the number
-or appearance of the test functions. Full column rank gives unique
-least-squares operator coefficients; small singular values make estimates
-sensitive to quadrature, discretization, and roundoff. Separate block condition
-numbers can reveal weak contributions but cannot rule out dependencies
-\emph{between} blocks. The source is recovered from a different matrix \(F\);
-its small observed errors should not be attributed to linearity alone, since all
-four recovery problems are linear in their unknown coefficients.
+Full column rank of the joint matrix \(A\), rather than each coefficient block,
+is necessary and sufficient for unique unconstrained least-squares operator
+coefficients. Small singular values can amplify discretization and rounding
+errors. Floating-point rank is a property of the reconstructed finite matrix;
+it is not a uniqueness theorem for the underlying observation operator.
 
-The reaction weights can be small when \(u\) is small, but their relative
-magnitude is instance-dependent. A large unweighted reaction integral does not
-ensure that a proposed row adds independent information. Screening term weights
-is therefore a possible heuristic, not an optimal-design guarantee. Similarly,
-a low consistency residual can coexist with substantial coefficient error.
+\begin{proposition}[An admissible nonidentifiable family]
+\label{prop:nullity}
+Let \(u(x)=x(1-x)\), \(N\ge2\), and
+\(T(\delta a,\delta b,\delta c)=-(\delta a u')'+\delta b u'+\delta c u\)
+with domain \(\Poly_{N-1}^3\). Then \(T\) has rank \(N+2\) and nullity
+\(2N-2\). Every element of its kernel leaves all continuum weak-form
+measurements unchanged at fixed \(u,f\).
+\end{proposition}
 
-\begin{remark}[A single solution need not identify the operator]
-Take \(u(x)=x(1-x)\) and \(f(x)=2\).
-For any sufficiently small \(\varepsilon\), the coefficients
-\[
- a=1+\varepsilon,\qquad
- b=\varepsilon(4x-2),\qquad
- c=-8\varepsilon
-\]
-satisfy the same boundary value problem because
-\[
- 2\varepsilon+
- \varepsilon(4x-2)(1-2x)-8\varepsilon x(1-x)=0.
-\]
-These perturbations lie in the \(N=2\) coefficient class. For example,
-\(\varepsilon=-1/8\) preserves positive diffusion and gives nonnegative
-reaction. No choice of test functions can distinguish these operators from
-\((a,b,c)=(1,0,0)\) using this solution and source alone.
-\end{remark}
+A proof and explicit elliptic examples appear in Appendix~\ref{app:proof}.
+This is a counterexample within the permitted class, rather than a claim that
+the 30 sampled instances belong to this quadratic-solution family. It rules out
+unconditional identifiability. Separate audits are needed to characterize
+recoverability on the sampled tasks.
 
-Thus the benchmark does not have unconditional structural identifiability.
-Uniqueness results using boundary maps or time-dependent observations
-\citep{egger2014simultaneous,browning2024structural,browning2025parabolic}
-concern different observation operators and do not establish it here.
-A stronger benchmark should characterize joint rank on its sampled instances,
-include nonidentifiable cases explicitly, and test additional sources or
-boundary data where uniqueness is required.
+\section{Evaluation Design}
+\label{sec:methods}
 
-\section{Archived study and provenance}
-\label{sec:data}
+\subsection{Archive and Provenance}
 
 The public Kaggle dataset, \emph{Elliptic Differential Equation LLM Reasoning},
-version 1, contains 180 scored run logs and an aggregate summary, released on
-16 April 2026. There are six model IDs, three difficulties, and exactly seeds
-1--10 in every cell (Table~\ref{tab:models}). Ground-truth coefficients agree
-across models for each seed--difficulty pair, permitting comparisons on the
-same ten tasks. The selected archive contains scored records; it does not
-establish how many failed or retried attempts preceded them.
+version 1, contains 180 scored logs: six models, three difficulty settings,
+and seeds 1--10 in every cell. The same 30 coefficient truths are shared across
+models. The archive was released on 16 April 2026; the provider model IDs are
+listed in Appendix~\ref{app:repro}.
+All logs record the \texttt{standard} prompt, called enhanced in the write-up.
+The archive does not contain a baseline-prompt ablation, repeated stochastic
+draws per model--task pair, or a complete record of earlier failed attempts and
+retries. Rates are consequently conditional on inclusion in the scored archive.
 
-\begin{table}[t]
+We verify the archive checksum, cell membership, shared truths, finite scores,
+and agreement with the saved sweep summary before analysis. The exact source
+revision and temperature are not recorded per run. A public implementation
+snapshot postdates some runs. Our new experiments use the current pinned
+numerical environment; they do not recreate historical provider calls.
+
+\subsection{Numerical Controls and Replay}
+\label{sec:controls}
+
+For the controls, we regenerate all 30 tasks from their recorded seeds, verify
+exact equality with saved coefficient truths, and evaluate
+non-language-model query policies under the same accepted-query limits and
+supplied query/solve interface. The policies use no hidden coefficients, solution values, measurement responses,
+or diagnostics to select expressions. Fixed sine chooses
+\(\varphi_k=\sin(k\pi x)\), \(k=1,\ldots,B\), where \(B=6N\) is the
+stored-query budget. Boundary Legendre chooses \(x(1-x)P_{k-1}(x)\), using
+factored expressions for numerical stability. Random mixed draws uniformly
+from five admissible families, using ten independently seeded query lists per
+setting, reused across the ten PDE seeds. Its fixed parameter ranges and exact
+expressions are released in the experiment output. All controls solve at every
+query count from \(4N\) through \(6N\); additional solves do not alter their
+predefined query lists. These controls test whether simple nonadaptive policies suffice on these
+instances; they do not reproduce the models' free-action
+or stopping decisions.
+
+For the numerical audit, we replay the archived query expressions, compare the
+returned source moments with the logs, and reconstruct joint matrix spectra.
+We report both raw and unit-column-norm spectra, with explicit relative singular
+value cutoffs rather than a binary rank label alone. We additionally multiply
+each reconstructed row and its source moment by a common amplitude before
+12-decimal rounding, leaving the query sets fixed and refitting all stored rows. This audit scores
+8-decimal diagnostic estimates, unlike unrounded primary final scores. In exact arithmetic this common scaling leaves least squares unchanged;
+its effect here tests the absolute quantization rule. It is a post hoc numerical
+sensitivity analysis, rather than an optimized query policy or a model rerun.
+
+\subsection{Statistical Unit and Behavioral Diagnostics}
+
+We also refine the forward and quadrature grids together by factors two and
+four. Original-resolution primary controls use the native dense solver.
+Refinements use an independently assembled banded solver for the same finite-
+difference equations; we validate its solution and score sensitivity against
+native solves on all 30 tasks. Refinement changes the numerical environment,
+rather than adding independent tasks or measuring observation-noise robustness.
+
+The comparison unit is the shared PDE seed within each difficulty, not an
+individual coefficient, solve, or confidence report. Each model has ten tasks
+per setting. We report Wilson 95\% intervals for marginal success proportions
+and paired task resampling for success differences (20,000 draws; seed 20261020). Exploratory pairwise tests
+condition on discordant tasks, with Holm correction across the 15 model pairs
+within each difficulty. There are no repeated model draws from which to estimate
+within-task response variance. Empirical paired-bootstrap intervals can
+degenerate when all ten observed task differences agree. These intervals describe uncertainty under task
+resampling assumptions and do not resolve selection into the scored archive.
+
+For confidence, a report is paired only with a solve returned on a strictly
+earlier transcript turn. The event is \(E_q<0.1\), separately for
+\(q\in\{a,b,c\}\). All reports and coefficient blocks within a run are
+kept together when resampling; run-balanced scores avoid giving a model more
+weight merely because it reports more often. Action counts, first-to-last solve
+improvement, and expression-family entropy are descriptive diagnostics. They do
+not independently validate planning, learning, or information gain.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Archived Recovery Differs, with Limited Resolution}
+
+Figure~\ref{fig:success} shows the archived success counts. At \(E<0.01\),
+Gemini 3.1 Pro succeeds on \(10/10\), \(9/10\), and \(10/10\) easy, medium,
+and hard tasks; Claude Opus 4.6 achieves \(10/10\), \(9/10\), and \(8/10\).
+GPT-5.4 achieves \(7/10\), \(3/10\), and \(1/10\). The other models also
+vary substantially across settings and seeds. The regenerated figure corrects
+the write-up asset's hard GPT-5.4 mini count from \(0/10\) to \(2/10\),
+which agrees with both individual logs and the archived sweep summary.
+
+With ten tasks, even \(10/10\) has a Wilson 95\% interval of approximately
+\([0.72,1.00]\), and \(9/10\) has \([0.60,0.98]\). Thus the heatmap is
+not a precise model ranking. All pairwise task-level comparisons and confidence
+intervals are released with the analysis; differences in this selected archive
+should not be generalized to end-to-end provider reliability.
+Only one of 45 exploratory pairwise comparisons has adjusted \(p<0.05\)
+under the stated within-difficulty Holm procedure: Gemini 3.1 Pro versus
+Claude Sonnet 4 on hard tasks (\(10/10\) versus \(0/10\), adjusted
+\(p=0.0293\)). There is no correction across the three difficulty families;
+this finding does not establish a global model ordering.
+
+\begin{figure*}[t]
 \centering
-\caption{Exact model IDs in the recovered archive. The names and settings
-describe the April 2026 experiments, rather than current provider offerings.}
-\label{tab:models}
-\small
+\includegraphics[width=0.89\textwidth]{images/paper_success.pdf}
+\caption{Archived recovery on 30 shared tasks, with ten scored records per model
+and difficulty. The two panels use total maximum-coefficient-error thresholds
+\(E<0.01\) and \(E<0.1\). Counts are conditional on the scored archive; unscored
+attempts and retries are not represented. The primary threshold was retained
+from the legacy success-plot convention; the scorer itself returns continuous errors.}
+\label{fig:success}
+\end{figure*}
+
+\subsection{Simple Nonadaptive Queries Suffice on These Tasks}
+\label{sec:baseline_results}
+
+The fixed sine policy reaches \(E<0.01\) on all ten tasks in each difficulty,
+already at the minimum \(4N\) stored queries (8, 12, and 16). It retains
+30/30 success at the full \(6N\) budget. Boundary Legendre succeeds on 29/30
+at full budget. Random mixed succeeds on 100/100 easy, 92/100 medium, and
+85/100 hard policy--task combinations (Table~\ref{tab:controls}); these reuse
+ten PDE instances per setting and are not 100 independent tasks.
+Across random query-list replicates, hard success ranges from 6/10 to 10/10.
+Figure~\ref{fig:controls} shows recovery at every permitted solve count.
+
+\input{paper_artifacts/control_table.tex}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{images/paper_controls.pdf}
+\caption{New controls on the 30 reconstructed tasks at the original grid
+resolution. Fixed sine and boundary Legendre use one predefined query list per
+setting. Random mixed averages ten independently seeded lists, each reused on
+the same ten tasks; shading is the minimum--maximum success fraction across
+lists, not a confidence interval. No query policy uses feedback or hidden truth.}
+\label{fig:controls}
+\end{figure*}
+
+These controls show that the archived tasks can be solved by a simple
+nonadaptive design with the supplied numerical tools. They do not show a
+statistically established advantage over the best archived model, nor isolate
+reasoning from parsing and stopping behavior. Because exact historical internal
+matrices were not retained, we compare newly reconstructed controls with
+archived outcomes transparently rather than claiming a prospective provider
+comparison. The evidence does not support a claim that language-model adaptation
+is necessary for recovery on this task set.
+
+Grid refinement improves numerical errors: for fixed sine at full budget,
+median \(E\) changes from \(9.47\times10^{-5}\) to
+\(2.18\times10^{-6}\) on easy, \(1.32\times10^{-3}\) to
+\(2.82\times10^{-5}\) on medium, and \(5.65\times10^{-4}\) to
+\(1.56\times10^{-5}\) on hard when the grid is refined fourfold.
+At twofold refinement, random mixed reaches 100/100 hard successes and
+boundary Legendre reaches 10/10 medium successes. The original-grid native and
+banded solves agree on both success thresholds at every checkpoint across all
+360 paired policy--task runs. Thus the banded implementation does not change
+these threshold comparisons, although individual numerical errors differ.
+
+\subsection{What Numerical Reconstruction Can Establish}
+\label{sec:numerics}
+
+All 30 coefficient truths regenerate exactly, and the reconstructed reference
+implementation reproduces all 2,874 archived query source moments exactly at
+the stored precision. Source-moment agreement does not test the historical forward solution or
+unretained operator matrix: the source moment depends only on \(f\), the test
+function, and quadrature. It does not establish exact historical solve replay: across 687 solves, the median maximum deviation from the logged
+8-decimal coefficient vectors is \(2.55\times10^{-5}\), and the largest is
+3.50. The archive lacks historical internal matrices and sufficient environment
+provenance to localize every discrepancy. New controls and spectral diagnostics
+must therefore be identified as reconstructions.
+
+All 180 reconstructed final stored-query matrices have full column rank at
+NumPy's default floating-point tolerance. After unit-column scaling, however,
+the median \(\sigma_{\min}/\sigma_{\max}\) is
+\(2.26\times10^{-7}\), \(5.53\times10^{-10}\), and
+\(1.80\times10^{-10}\) for easy, medium, and hard runs. At a declared
+relative cutoff of \(10^{-8}\), 13/60, 42/60, and 37/60 matrices are rank
+deficient. These are diagnostics of limited numerical resolution, not continuum
+nonuniqueness certificates for the sampled instances.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{images/paper_numerical_audit.pdf}
+\caption{Numerical audit of reconstructed archived measurements. Left:
+unit-column-norm smallest-to-largest singular-value ratios, one point per
+model--task query design. The dashed line is a diagnostic cutoff, not a theorem
+of nonidentifiability. Right: strict-threshold success after common row/RHS
+scaling before absolute 12-decimal rounding, using all stored queries and fixed
+archived expression choices. These post hoc solves use reconstructed matrices and 8-decimal diagnostic
+estimates, and include later stored queries when a run stopped solving before
+its final query; they are not archived final submissions.}
+\label{fig:audit}
+\end{figure*}
+
+Common-amplitude scaling changes the reconstruction's \(E<0.01\) counts
+(Figure~\ref{fig:audit}). At amplitudes \(10^{-3},1,10^3\), the counts
+are respectively 24/50/53 of 60 easy runs, 11/36/48 medium runs, and 19/28/33
+hard runs. No additional test functions are selected: the exact-arithmetic measurements
+differ only by a common nonzero factor, while their relative quantization
+precision changes.
+The changed counts show that absolute rounding and ill conditioning can alter
+a success event even when the underlying span of measurements is unchanged.
+They do not establish that larger amplitude universally improves recovery.
+
+\subsection{Information Use and Confidence}
+
+The archive contains 459 free consistency checks; 457 check expressions are
+absent as literal strings from earlier stored-query histories. Literal novelty
+does not prove semantic independence, but each check exposes an actual source
+moment. Thus stored-query counts alone do not equate the information acquired
+by two policies. This behavior is permitted by the protocol.
+
+The confidence analysis finds 733 reports, of which 707 follow a solve and
+26 are excluded. The retained reports yield 2,121 coefficient observations.
+Causal matching changes the solve assigned to 71 reports relative to the legacy
+query-count rule; 827 observations lie on interior confidence-bin boundaries
+that the older plots could count twice. Corrected calibration curves and the
+Kaggle action, improvement, and diversity figures appear in
+Appendix~\ref{app:behavior}. Their interpretation remains descriptive: repeated
+reports are dependent, prompt instructions affect action use, and expression
+families are not independent measurement directions.
+
+\section{Discussion and Limitations}
+
+The audit reveals three requirements for interpreting measurement-selection
+benchmarks. First, the observation model must distinguish identifiable
+parameters from equivalent operators. A finite matrix's numerical rank does not
+replace this analysis. Second, normalization, precision, and discretization must
+be specified and tested. Changing a mathematical representation without adding
+information should not silently change the claimed ability being measured.
+Third, every truth-dependent observation must enter the information accounting,
+including diagnostics exposed as free tools.
+
+Our evidence is deliberately bounded. The archive contains 30 tasks and one
+scored response trajectory per model--task pair, rather than a prospective
+all-attempt study. Difficulty settings conflate dimension, scale, sparsity, and
+resolution. This spatially one-dimensional equation is mathematically an ODE
+boundary-value problem; the task does not test multidimensional PDE structure. We cannot reconstruct missing attempt histories or exact provider
+settings. The structural proposition concerns an admissible subclass and does
+not determine the continuum rank of every sampled operator. Reconstructed
+spectra, amplitude tests, and numerical controls inherit the current solver and
+must not be presented as historical model reruns.
+
+A prospective benchmark should preregister the task distribution, retain every
+attempt and failure, fix model versions and generation settings, and compare
+fixed, randomized, and adaptive designs under a common observation budget.
+It should normalize admissible tests, specify a noise or precision model,
+characterize joint observability, and include prediction under independent
+sources or boundary data where coefficient uniqueness is required. Confidence
+scores should use a defined event and a declared reporting schedule. These are
+requirements for a stronger experimental claim, rather than quantities that
+can be inferred from the present archive.
+
+\section{Conclusion}
+
+Weak-form inverse problems make parts of scientific-agent evaluation directly
+inspectable. The archived models differ in recovery and interaction behavior,
+but an interpretation in terms of experimental-design ability requires controls
+for the observation model, numerical conditioning, and information accounting.
+A fixed sine design suffices on every reconstructed task, making numerical
+baselines essential to the interpretation of model scores. The released
+analysis provides checks for this benchmark and a concrete
+basis for designing a more controlled prospective study.
+
+\section*{Impact Statement}
+
+This work studies a small mathematical environment for evaluating scientific
+agents. Its immediate use is methodological: making evaluation claims traceable
+to observations, numerical assumptions, and complete records. Overinterpreting
+such scores could distort comparisons of scientific capabilities; the audit
+limits that risk by documenting what the measurements support. We do not infer
+readiness for autonomous scientific deployment from these experiments.
+
+\section*{Reproducibility}
+
+Code, analysis scripts, pinned archive provenance, and derived summaries are
+available at \url{https://github.com/Hydrodynamical/PDE_Learning}.
+The new controls and analyses in this revision use no provider calls. Appendix~\ref{app:repro}
+gives data and numerical details. The PDF is a public preprint using the ICML
+2026 format; it is not an anonymized conference submission.
+
+\bibliography{references}
+\bibliographystyle{icml2026}
+
+\clearpage
+\appendix
+\onecolumn
+\section{Structural Nonuniqueness: Proof and Examples}
+\label{app:proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:nullity}]
+Let \(\Poly_d\) denote polynomials of degree at most \(d\).
+For \(u=x(1-x)\), all three terms in \(T\) lie in \(\Poly_{N+1}\),
+so the rank is at most \(N+2\). The reaction component contains
+\(u\Poly_{N-1}\). Taking constant \(\delta a\) gives a nonzero constant
+because \(-u''=2\), and taking constant \(\delta b\) gives \(u'=1-2x\).
+These span \(\Poly_1\). Polynomial division by the quadratic \(u\) gives
+\(\Poly_{N+1}=u\Poly_{N-1}\oplus\Poly_1\), proving surjectivity and rank
+\(N+2\). The domain has dimension \(3N\), so rank--nullity gives
+\(\dim\ker T=2N-2\). Multiplication by any admissible test function and
+integration by parts shows that a kernel element changes no weak measurement.
+\end{proof}
+
+For \(N=2\), \(u=x(1-x)\) and \(f=3\), the operators
+\[
+ a=\tfrac32+\varepsilon,\qquad b=\varepsilon(4x-2),\qquad c=-8\varepsilon
+\]
+all satisfy the same equation, since
+\(2\varepsilon+\varepsilon(4x-2)(1-2x)-8\varepsilon x(1-x)=0\).
+For example \(\varepsilon=-1/8\) preserves positive diffusion and gives
+nonnegative reaction. For \(N\ge3\), the base choice
+\(a=1,b=0,c=1,f=2+u\) belongs to the class. Sufficiently small perturbations
+in every kernel direction preserve positive diffusion and reaction, giving a relatively open \((2N-2)\)-dimensional family in the affine kernel
+of admissible coefficient tuples with identical observations.
+Neither construction is asserted to occur among the 30 sampled tasks.
+The audit script also verifies ranks over exact rational arithmetic for
+\(N=2,\ldots,8\); these checks supplement the proof rather than replace it.
+
+\section{Data, Implementation, and Statistical Details}
+\label{app:repro}
+
+The primary input is the public Kaggle dataset \emph{Elliptic Differential
+Equation LLM Reasoning}, version 1. The repository's
+\path{paper_artifacts/data_manifest.json} records the dataset URL, version,
+SHA-256 digest, expected members, model IDs, seeds, and logged settings. Analysis
+scripts validate the pinned archive before reading its JSON members; they do
+not execute archive contents. The reference environment is Python 3.12 with
+pinned numerical packages in \path{requirements.txt}. Derived JSON files retain
+per-task observations, method definitions, and numerical cutoffs.
+
+\begin{table}[ht]
+\centering
+\caption{Exact provider IDs in the April 2026 archive. Display names describe
+that archived experiment, rather than current provider offerings.}
 \begin{tabular}{@{}ll@{}}
 \toprule
 Display name & Recorded model ID\\
@@ -266,257 +605,128 @@ GPT-5.4 mini & \texttt{gpt-5.4-mini}\\
 \end{tabular}
 \end{table}
 
-OpenAI records specify \texttt{reasoning\_effort=medium}; other providers have no
-recorded reasoning-effort override. Temperature is absent from the archived run
-configuration. A separately published \emph{PDE Library}, version 9, provides an
-implementation snapshot, but is not pinned per run and postdates some records.
-We can reproduce aggregates from the saved outputs without claiming to recreate
-the exact provider calls or every historical source revision.
+OpenAI records specify \texttt{reasoning\_effort=medium}; the other providers
+have no recorded override. Temperature is absent. The \emph{PDE Library},
+version 9, is a separately published source snapshot that postdates some runs,
+not an exact per-run revision. Exact coefficient regeneration and query-RHS
+agreement narrow the reproduction gap, but the solve discrepancies reported in
+the main text prohibit a claim of bitwise historical replay.
 
-The original draft also contained a distinct three-model, two-seed pilot.
-Those tables are preserved in Appendix~\ref{app:pilot}; they are not pooled with
-the recovered study. The proposed five-seed, two-prompt experiment in that draft
-is not the design of the recovered 180-run archive.
+The original write-up describes basis sizes 3/5/8 and a held-out-grid function
+success criterion; the logs and scoring code establish 2/3/4 and
+Equation~\eqref{eq:error}. These corrections are recorded in the derived
+summaries. The earlier draft's distinct three-model, two-seed pilot lacks source
+logs and used an unverified error norm. Its numeric tables are preserved in
+\path{paper_artifacts/legacy_pilot_tables.tex} for provenance, but excluded from
+this manuscript's empirical evidence.
 
-\section{Results}
-\label{sec:results}
+\input{paper_artifacts/statistical_tables.tex}
+\FloatBarrier
 
-\subsection{Coefficient recovery}
+\section{Behavioral Figures and Their Interpretation}
+\label{app:behavior}
 
-Figure~\ref{fig:success} summarizes the scored archive. At \(E<0.01\), Gemini 3.1
-Pro succeeds on \(10/10\), \(9/10\), and \(10/10\) easy, medium, and hard instances.
-Claude Opus 4.6 achieves \(10/10\), \(9/10\), and \(8/10\). GPT-5.4 has a sharper
-decline, from \(7/10\) on easy to \(3/10\) on medium and \(1/10\) on hard.
-The remaining models also show substantial task dependence. These are
-descriptive rates on ten shared instances, conditional on inclusion in the
-scored archive, rather than estimates of success on all attempted runs.
+The figures below regenerate the relevant Kaggle diagnostics from the full
+archive. They retain the original operational questions while correcting data
+or plotting discrepancies. For action counts, stacked marginal medians need not
+sum to the median total action count. For improvement,
+\(R=E_{\mathrm{first}}/E_{\mathrm{last}}\); missing ratios, including
+single-solve runs, receive the historical display default \(R=1\). Large ratios
+can reflect poor initial estimates or the ordinary benefit of additional data.
 
-The regenerated strict-threshold figure corrects GPT-5.4 mini on hard from
-\(0/10\) in the checked-in PNG to \(2/10\). Both the individual logs and archived
-summary identify seeds 4 and 5 as below \(0.01\). The corrected count also shows
-why model-wide rankings and claims about universal difficulty gradients should
-be avoided. All other displayed success counts agree with the original assets.
+Query-family entropy is
+\(H=-\sum_{i=1}^5p_i\log_2p_i/\log_2 5\), with \(0\log0=0\).
+The five categories are polynomial, trigonometric, exponential, localized, and
+other, assigned by a heuristic string classifier. The archived taxonomy is
+recorded at the final solve; later queries in six runs are absent from it.
+A high entropy does not imply linearly independent or useful measurements.
 
-\begin{figure}[p]
+The confidence plots use disjoint bins \([l,h)\), with 1 included in the last
+bin, and show mean confidence against empirical correctness. Reports are
+matched only to strictly earlier solves, since a solve requested in a report's
+own response has not yet been returned. The corrected 707 reports contribute
+2,121 dependent observations for \(a,b,c\), excluding \(f\). Individual
+coefficient reports are not treated as independent tasks.
+
+For run \(i\) with \(m_i\) retained coefficient observations, the run-balanced
+Brier score is
+\[
+ \frac{1}{n}\sum_{i=1}^n\frac{1}{m_i}\sum_{r=1}^{m_i}(p_{ir}-y_{ir})^2.
+\]
+We also report the signed gap obtained by replacing the square with
+\(p_{ir}-y_{ir}\); positive values indicate average overconfidence.
+This gap is calibration in the large, not expected calibration error or a full
+calibration criterion. Intervals resample whole supported runs with 20,000 draws.
+There are 179 supported runs: Gemini Flash hard has nine and all other cells ten.
+Run balancing does not align reporting stages, query counts, or base accuracies.
+Thus these scores cannot compare intrinsic metacognitive ability without a
+matched reporting schedule and correctness distribution.
+
+\begin{figure}[ht]
 \centering
-\includegraphics[width=\linewidth,height=0.80\textheight,keepaspectratio]{images/paper_success.pdf}
-\caption{Recovery success regenerated from all 180 archived scored logs.
-Panels use total absolute coefficient-error thresholds \(E<0.01\) and \(E<0.1\).
-Each annotation gives successes out of ten scored records. The archive contains
-no unscored attempts, so these denominators do not measure end-to-end reliability
-across all attempts. The strict-threshold GPT-5.4 mini hard count is corrected
-to \(2/10\).}
-\label{fig:success}
+\includegraphics[width=\textwidth]{images/paper_confidence_uncertainty.pdf}
+\caption{Run-balanced confidence summaries with whole-run percentile-bootstrap
+95\% intervals, conditional on having a preceding solve and confidence report.
+Brier scores reflect both correctness and stated confidence. Signed gaps measure
+average confidence minus correctness; zero alone does not establish calibration.
+Reports and coefficient blocks remain clustered within runs.}
+\label{fig:confidence_uncertainty}
 \end{figure}
 
-\FloatBarrier
-\subsection{Tool use, improvement, and query diversity}
+\section{Why Legacy Sensitivity Scores Are Not Uncertainty Estimates}
 
-The write-up's behavioral figures address useful questions beyond final error,
-provided their labels are interpreted operationally.
+The archived code forms a truncated pseudoinverse \(H_k\) of
+\(A_k^\top A_k\), discarding singular values below \(10^{-10}\) times the
+largest. It summarizes each coefficient block using
+\(s_k(q)=\sqrt{\sum_{i\in q}(H_k)_{ii}/N}\).
+A truncated inverse can assign zero weight to unresolved directions. Without
+an observation-noise model and rank conditions, it is not a calibrated
+coefficient covariance. Separate block values also cannot diagnose dependencies
+between blocks.
 
-\paragraph{Action use.}
-Figure~\ref{fig:actions} separates solve calls, consistency checks, and term-integral
-requests. The profiles show how models allocate tool interactions. More activity
-does not by itself imply better recovery: the common prompt encourages repeated
-solves, checks return information without adding solver rows, and efficient
-strategies can use few actions. The bars stack separate marginal medians, so the
-height is not necessarily the median total action count.
+The monitoring routine ranks values using double \texttt{argsort}, without
+averaging ties; it is not standard tie-aware Spearman correlation. The control
+routine applies a Sherman--Morrison-style update to a truncated pseudoinverse,
+which need not agree with a freshly recomputed truncated inverse, and compares
+reductions across blocks for the chosen next row rather than across candidate
+queries. We retain these source fields for provenance but do not use them as
+evidence of calibrated uncertainty or optimal experimental design.
 
 \begin{figure}[p]
 \centering
-\includegraphics[width=\linewidth,height=0.81\textheight,keepaspectratio]{images/paper_actions.pdf}
-\caption{Tool-use profiles regenerated from the archive, with one panel per
-difficulty. Stacked segments are the separate median counts of solves, consistency
-checks, and term-integral requests across ten runs per model. The sum of these
-medians need not equal the median total count. These measurements describe
-interaction strategies under the supplied protocol.}
+\includegraphics[width=.84\textwidth,height=.79\textheight,keepaspectratio]{images/paper_actions.pdf}
+\caption{Archived tool use, with one panel per difficulty. Stacked components
+are separate marginal medians across ten runs per model. The prompt encourages
+iteration and checks supply source moments, so more actions do not establish
+better experimental design.}
 \label{fig:actions}
 \end{figure}
-
-\paragraph{Improvement during a session.}
-For runs with successive solves, define
-\(R=E_{\mathrm{first}}/E_{\mathrm{last}}\).
-Figure~\ref{fig:improvement} shows substantial variation across seeds.
-The original plotting convention assigns \(R=1\) when the improvement ratio is
-missing, including single-solve runs. A large ratio may reflect a poor initial
-estimate; it is not evidence of a small final error. Improvement with added
-measurements also does not alone distinguish model adaptation from routine
-least-squares improvement.
-
 \begin{figure}[p]
 \centering
-\includegraphics[width=\linewidth,height=0.81\textheight,keepaspectratio]{images/paper_improvement.pdf}
-\caption{First-to-last solve improvement \(R\), on a logarithmic scale.
-Dots show individual archived runs and black markers show medians across the ten
-runs per model and difficulty. Missing ratios receive the historical plotting
-default \(R=1\). The result measures within-session error change, not model-weight
-learning or an independently validated learning faculty.}
+\includegraphics[width=.84\textwidth,height=.79\textheight,keepaspectratio]{images/paper_improvement.pdf}
+\caption{First-to-last solve improvement on a logarithmic scale. Points are
+runs and black markers are medians. Missing ratios have display value one.
+This statistic measures within-session error change, not model-weight learning.}
 \label{fig:improvement}
 \end{figure}
-
-\paragraph{Query-family diversity.}
-The implementation assigns expressions to five heuristic string-based families:
-polynomial, trigonometric, exponential, localized, and other. We report
-\[
- H_{\mathrm{norm}}=
- -\frac{\sum_{i=1}^{5}p_i\log_2p_i}{\log_2 5},
-\]
-where \(p_i\) is the fraction assigned to family \(i\) in the archived taxonomy
-at the final solve, and \(0\log0=0\). Six runs queried again after their final
-solve; those later queries do not enter this archived entropy.
-Figure~\ref{fig:diversity} describes differences in this taxonomy.
-The statistic does not measure linear independence: a diverse family mixture
-can be redundant, while polynomial-only functions can span useful directions.
-It should be interpreted alongside the joint matrix and final recovery error.
-
 \begin{figure}[p]
 \centering
-\includegraphics[width=\linewidth,height=0.81\textheight,keepaspectratio]{images/paper_diversity.pdf}
-\caption{Normalized query-family entropy regenerated from the archive.
-Bars show means, whiskers one population standard deviation, dots individual
-runs, and black markers medians. The taxonomy is a heuristic classification of
-expressions; entropy does not establish informative or independent measurements.}
+\includegraphics[width=.84\textwidth,height=.79\textheight,keepaspectratio]{images/paper_diversity.pdf}
+\caption{Normalized expression-family entropy. Bars are means, whiskers one
+population standard deviation, points individual runs, and black markers medians.
+The taxonomy describes expression forms, not measurement independence.}
 \label{fig:diversity}
 \end{figure}
-
-\subsection{Confidence reporting}
-
-The interface requests confidence that each coefficient vector is within an
-absolute error of \(0.1\). Appendix~\ref{app:confidence} examines empirical
-agreement between these reports and the corresponding recorded estimates.
-This differs from the write-up's fixed confidence-order diagnostic
-\(\mathrm{Conf}(a)>\mathrm{Conf}(b)>\mathrm{Conf}(c)\), which assumes a hierarchy
-that need not hold on every instance. It also differs from the legacy
-design-matrix sensitivity diagnostics discussed in Appendix~\ref{app:legacy}.
-
-The calibration analysis uses transcript order to pair reports only with
-earlier solves, preventing a later improved estimate from being assigned to an
-earlier confidence statement. Reports with no preceding solve are excluded,
-and bin counts are retained. Repeated reports from the same run are dependent;
-the curves are descriptive and are not used to rank general metacognitive ability.
-
-The archive contains 733 reports, of which 707 have a preceding solve and
-26 do not. The paired reports contribute 2,121 coefficient observations after
-excluding the source block. The summary retains counts in disjoint width-0.1
-confidence bins. Reports in one response are paired only to strictly earlier
-solve outputs, rather than a solve requested in that same response. This corrects
-the older plotting code's forward-looking query-count matching and overlapping
-bin endpoints.
-
-\section{Interpretation, limitations, and next experiments}
-
-The benchmark isolates an interesting interaction between measurement selection
-and numerical tools. It is related to applied-mathematics evaluations such as
-HARDMath2 \citep{hardmath2025} and mathematical-modeling tasks such as Mamo
-\citep{mamo2025}, while emphasizing sequential inverse-problem measurements.
-Its behavioral axes are inspired by a cognitive taxonomy
-\citep{burnell2026cognitive}; they do not establish that the task independently
-measures eight cognitive faculties.
-
-Several limits matter for interpretation. First, only ten shared PDE seeds per
-difficulty are represented, and the archive includes scored records rather than
-a complete attempt history. Second, a text-based interface mixes mathematical
-decisions with command formatting and protocol compliance. A turn without a
-recognized command is not equivalent to a rejected mathematical expression:
-a recognized \texttt{QUERY} can still fail validation. Third, repeated solves,
-confidence reporting, and iteration are explicitly prompted, so action counts
-cannot establish unprompted planning.
-
-Fourth, single-solution structural nonuniqueness can coexist with numerical
-conditioning problems. Future evaluations should report joint rank and singular
-values, distinguish identifiable from ambiguous cases, and compare recovery in
-coefficient space with out-of-design predictions. Fifth, the archive does not
-pin complete provider settings or implementation revisions. Reproducing the
-saved figures is a different claim from reproducing historical model responses.
-
-Useful next comparisons include fixed polynomial and trigonometric query
-designs, random admissible queries, and adaptive design heuristics under identical
-query and turn budgets. Baseline and standard prompts should be compared on
-matched tasks with all attempts retained. Confidence evaluation should define
-the correctness event in advance, retain report-level sample counts, and account
-for dependence within runs \citep{guo2017calibration}. These controls would help
-determine which behavioral differences predict useful experimental decisions.
-
-\section{Conclusion}
-
-Weak-form coefficient identification supplies a controlled setting for studying
-how language models choose measurements and use numerical feedback. The recovered
-180-run archive permits reproducible comparisons of final errors and concrete
-interaction patterns. The results support descriptive differences among the
-evaluated models on these tasks, while the identifiability counterexample and
-provenance limits constrain stronger claims. The next step is a controlled
-comparison of measurement strategies with explicit rank checks and complete
-attempt histories.
-
-\paragraph{Code and data.}
-The implementation is available at
-\url{https://github.com/Hydrodynamical/PDE_Learning}.
-The Kaggle write-up links the public run archive and implementation snapshot.
-The repository records source URLs, versions, and archive checksums in
-\path{paper_artifacts/data_manifest.json}; the figure-generation script and
-derived summary are described in \path{paper_artifacts/README.md}.
-No new provider calls are required to reproduce this analysis.
-
-\clearpage
-\appendix
-\section{Confidence calibration}
-\label{app:confidence}
-
-\begin{center}
-\includegraphics[width=\linewidth,height=0.78\textheight,keepaspectratio]{images/paper_calibration.pdf}
-\captionsetup{hypcap=false}
-\captionof{figure}{Descriptive confidence calibration with causal report-to-solve
-pairing. Within each model and difficulty, the fraction of coefficient estimates
-with \(E_q<0.1\) is plotted against mean stated confidence in disjoint width-0.1
-bins. The diagonal denotes agreement. Marker sizes increase with bin support;
-full counts are saved in the summary. The 707 paired reports contribute 2,121
-observations for \(a,b,c\), excluding \(f\). Reports within a run and across
-coefficient blocks are dependent. No uncertainty bands or general calibration
-ranking are inferred.}
+\begin{figure}[p]
+\centering
+\includegraphics[width=.84\textwidth,height=.79\textheight,keepaspectratio]{images/paper_calibration.pdf}
+\caption{Corrected descriptive confidence curves. The horizontal coordinate
+is mean stated confidence in a disjoint width-0.1 bin; the vertical coordinate
+is the fraction with \(E_q<0.1\). Marker area grows with bin support. The
+707 causally paired reports contribute 2,121 observations, clustered within runs;
+these curves alone are not a general calibration ranking.}
 \label{fig:calibration}
-\end{center}
+\end{figure}
 \FloatBarrier
 
-\section{Legacy sensitivity and monitoring statistics}
-\label{app:legacy}
-
-The archived implementation computes a truncated pseudoinverse \(H_k\) of
-\(A_k^\top A_k\), discarding singular values below \(10^{-10}\) times the
-largest value. It forms block scores
-\[
- s_k(q)=\sqrt{\frac{1}{N}\sum_{i\in q}(H_k)_{ii}},\qquad q\in\{a,b,c\}.
-\]
-These are design-based sensitivity proxies, not the model's true epistemic
-uncertainty. Interpreting an inverse information matrix as a covariance requires
-an appropriate observation-noise model and rank assumptions. The truncated
-pseudoinverse can assign zero weight to unresolved directions.
-
-The legacy monitoring routine compares rank encodings of \(s_k\) and stated
-uncertainty. Its double-\texttt{argsort} ranking does not average tied ranks,
-so it is not standard tie-aware Spearman correlation. The control routine applies
-a Sherman--Morrison-style update to the truncated inverse and compares reductions
-across coefficient blocks for the \emph{chosen} next row. This need not equal a
-freshly recomputed truncated inverse, and it does not compare alternative query
-choices. We retain these fields in the source logs but do not use them as
-calibrated uncertainty measures or as evidence of optimal experimental design.
-
-\section{Earlier pilot tables}
-\label{app:pilot}
-
-These tables preserve a separate three-model, two-seed pilot whose source logs
-have not been recovered. The earlier draft described its errors as mean absolute
-coefficient deviations; that convention cannot be verified and differs from
-Equation~\eqref{eq:error}. These values should not be pooled or compared
-numerically with the main study. The legacy \(\bar M\) column also has the
-limitations in Appendix~\ref{app:legacy}.
-
-\input{paper_artifacts/legacy_pilot_tables.tex}
-\FloatBarrier
-
-\begingroup
-\footnotesize
-\bibliographystyle{plainnat}
-\bibliography{references}
-\endgroup
 \end{document}

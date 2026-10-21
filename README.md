@@ -162,8 +162,14 @@ figures requires no new model calls. Historical provider responses cannot be
 recreated exactly from the archive because complete settings and source
 revisions were not recorded.
 
-The earlier three-model, two-seed pilot tables are retained separately in the
-paper's appendix. Their source logs have not been recovered, and they are not
+The research revision adds fixed and randomized numerical controls, paired
+statistical comparisons, joint-matrix spectra, and precision/refinement audits.
+Fixed sine queries recover all 30 reconstructed tasks at the strict threshold
+using the minimum permitted solve budget. This limits claims of a benefit from
+adaptive language-model measurement selection on these instances.
+
+The earlier three-model, two-seed pilot tables are retained separately in
+`paper_artifacts/legacy_pilot_tables.tex`. Their source logs have not been recovered, and they are not
 pooled with the six-model study. Saved Kaggle notebooks contain further
 exploratory outputs under their own settings.
 

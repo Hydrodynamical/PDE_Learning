@@ -23,5 +23,7 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Test numerical core, parser, and CLI workflows
         run: python -m unittest discover -s . -p 'test_*.py' -v
+      - name: Verify research output provenance
+        run: python scripts/verify_paper_artifacts.py
       - name: Generate an offline example with its dashboard
         run: python main_loop.py --mock --difficulty easy --seed 42 --output-dir runs/ci-smoke
