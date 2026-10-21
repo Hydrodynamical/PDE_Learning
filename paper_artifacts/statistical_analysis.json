@@ -1,0 +1,4301 @@
+{
+  "schema_version": 1,
+  "environment": {
+    "python": "3.12.12",
+    "numpy": "2.5.4"
+  },
+  "source_sha256": {
+    "scripts/analyze_archive_statistics.py": "a87ce24b1e3773803be5d65bc896044767722a54881406d41166c8ae71e0bee8",
+    "scripts/reproduce_paper_figures.py": "abdfe12686a7affcda657bb4e00858a1f4fb40e69aad586b9fa86a32d30a93b7",
+    "requirements.txt": "39a52b2e7d6304c1c80053325ca16be1542e2993d5299bb11f9807bf875d8bfd"
+  },
+  "archive_sha256": "b2f50742cc76acae4a6a8d7b04d434e7735acf107d57f08f499e1dfcf05ce66f",
+  "dataset_url": "https://www.kaggle.com/datasets/jkmiller/elliptic-differential-equation-llm-reasoning/versions/1",
+  "analysis_kind": "exploratory, conditional on inclusion in the scored archive",
+  "settings": {
+    "bootstrap_resamples": 20000,
+    "random_seed": 20261020,
+    "confidence_level": 0.95,
+    "bootstrap_quantiles": [
+      0.025,
+      0.975
+    ],
+    "bootstrap_quantile_method": "linear",
+    "success_thresholds": [
+      0.01,
+      0.1
+    ],
+    "paired_comparison_threshold": 0.01,
+    "multiplicity": "Holm correction within all 15 model pairs separately for each difficulty; no correction across difficulties"
+  },
+  "uncertainty_units": {
+    "success_intervals": "Wilson 95% score intervals over ten task seeds per model/difficulty, conditional on scored archive inclusion; illustrative task-sampling uncertainty under a binomial sampling model",
+    "paired_comparisons": "Task seed within one difficulty. A draw retains the two models' outcomes on the same task; models are never treated as independent samples on that task.",
+    "confidence": "One run on one task. First average all causally paired a/b/c observations within the run; then weight supported runs equally. Resample whole supported runs with their reports and coefficient blocks intact, conditional on having a paired report.",
+    "calibration_gap": "Signed calibration-in-the-large gap: mean within-run confidence minus mean within-run correctness, then averaged equally across runs. Positive means overconfidence; zero alone does not imply calibration, and this is not ECE.",
+    "confidence_event": "The preceding solve has block maximum absolute coefficient error E_q < 0.1; reports pair only to strictly earlier transcript turns; source f is excluded.",
+    "scope": "Six model policies evaluated on 30 seed/difficulty tasks (ten per difficulty), with one retained scored record per model/task. No repeated model-sampling runs or complete attempt history are available.",
+    "limitations": [
+      "Intervals do not account for missing attempts, retries, archive selection, implementation drift, or model-sampling variability.",
+      "Ten tasks per difficulty give coarse tests and potentially degenerate empirical bootstrap intervals; these intervals do not establish universal rates or model rankings.",
+      "Seed labels are reused across difficulties. Analyses and resampling remain within difficulty and do not assume independence across difficulties.",
+      "Paired percentile intervals are unadjusted exploratory intervals; only exact paired test p-values receive the stated Holm correction.",
+      "These resampling distributions describe sensitivity to the ten observed tasks under exchangeable task-sampling assumptions; they do not prove the archive is representative of a target population.",
+      "Report count is not an independent sample size. Runs without causally paired confidence reports are excluded from confidence estimands and their seeds are listed."
+    ]
+  },
+  "cells": [
+    {
+      "model": "gemini-3.1-pro-preview",
+      "difficulty": "easy",
+      "success": {
+        "0.01": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 30,
+        "reports_paired": 30,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 90,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 9,
+            "brier_score": 0.13447777777777778,
+            "mean_confidence": 0.8077777777777777,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.1922222222222222
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 9,
+            "brier_score": 0.0867,
+            "mean_confidence": 0.7966666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.20333333333333334
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 9,
+            "brier_score": 0.19281111111111113,
+            "mean_confidence": 0.7188888888888889,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.28111111111111114
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.0867,
+            "mean_confidence": 0.7966666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.20333333333333334
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 9,
+            "brier_score": 0.2708666666666667,
+            "mean_confidence": 0.68,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.32
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 9,
+            "brier_score": 0.22003333333333333,
+            "mean_confidence": 0.73,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.27
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 6,
+            "brier_score": 0.3116666666666667,
+            "mean_confidence": 0.6166666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3833333333333333
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.14555555555555555,
+            "mean_confidence": 0.8111111111111111,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.18888888888888888
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 9,
+            "brier_score": 0.08339999999999999,
+            "mean_confidence": 0.8266666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.17333333333333334
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.06315,
+            "mean_confidence": 0.86,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.14
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.15953611111111113,
+            "whole_run_bootstrap_95_interval": [
+              0.11089722222222223,
+              0.21200555555555556
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.7644444444444445,
+            "whole_run_bootstrap_95_interval": [
+              0.7175555555555556,
+              0.8062222222222223
+            ]
+          },
+          "success_fraction": {
+            "estimate": 1.0,
+            "whole_run_bootstrap_95_interval": [
+              1.0,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.23555555555555557,
+            "whole_run_bootstrap_95_interval": [
+              -0.2824444444444444,
+              -0.19377777777777777
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "claude-opus-4-6",
+      "difficulty": "easy",
+      "success": {
+        "0.01": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 32,
+        "reports_paired": 32,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 96,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 18,
+            "brier_score": 0.2972222222222223,
+            "mean_confidence": 0.4722222222222222,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.5277777777777778
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 6,
+            "brier_score": 0.01155,
+            "mean_confidence": 0.9149999999999999,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.08500000000000002
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 3,
+            "brier_score": 0.0044666666666666665,
+            "mean_confidence": 0.94,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.06000000000000002
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 15,
+            "brier_score": 0.29250000000000004,
+            "mean_confidence": 0.4900000000000001,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.51
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 6,
+            "brier_score": 0.0042,
+            "mean_confidence": 0.9466666666666668,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.053333333333333344
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 9,
+            "brier_score": 0.39388888888888896,
+            "mean_confidence": 0.41111111111111115,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.5888888888888889
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 12,
+            "brier_score": 0.13681666666666667,
+            "mean_confidence": 0.7283333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.27166666666666667
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 6,
+            "brier_score": 0.011133333333333334,
+            "mean_confidence": 0.9066666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.09333333333333334
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 9,
+            "brier_score": 0.23444444444444448,
+            "mean_confidence": 0.5666666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.43333333333333335
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.21874999999999997,
+            "mean_confidence": 0.5916666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.4083333333333334
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.16049722222222224,
+            "whole_run_bootstrap_95_interval": [
+              0.07465993055555556,
+              0.24807283333333335
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.6968333333333334,
+            "whole_run_bootstrap_95_interval": [
+              0.5714402777777778,
+              0.8245555555555555
+            ]
+          },
+          "success_fraction": {
+            "estimate": 1.0,
+            "whole_run_bootstrap_95_interval": [
+              1.0,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.3031666666666667,
+            "whole_run_bootstrap_95_interval": [
+              -0.42855972222222233,
+              -0.17544444444444446
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5.4",
+      "difficulty": "easy",
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7,
+          "wilson_95_interval": [
+            0.3967781474611454,
+            0.8922087325936989
+          ]
+        },
+        "0.1": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8,
+          "wilson_95_interval": [
+            0.4901624715366419,
+            0.9433178485456246
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 36,
+        "reports_paired": 34,
+        "reports_excluded_no_preceding_solve": 2
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 102,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 15,
+            "brier_score": 0.2184733333333334,
+            "mean_confidence": 0.67,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": 0.003333333333333336
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 9,
+            "brier_score": 0.048655555555555556,
+            "mean_confidence": 0.8433333333333333,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.15666666666666668
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 6,
+            "brier_score": 0.40091666666666664,
+            "mean_confidence": 0.785,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.45166666666666666
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 15,
+            "brier_score": 0.03380000000000001,
+            "mean_confidence": 0.8639999999999998,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.136
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 6,
+            "brier_score": 0.16128333333333333,
+            "mean_confidence": 0.49500000000000005,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.16166666666666665
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 12,
+            "brier_score": 0.183225,
+            "mean_confidence": 0.6375000000000001,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3625
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 9,
+            "brier_score": 0.12128888888888888,
+            "mean_confidence": 0.7266666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2733333333333333
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.08305555555555556,
+            "mean_confidence": 0.7744444444444443,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2255555555555556
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 12,
+            "brier_score": 0.3241833333333334,
+            "mean_confidence": 0.3466666666666667,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": -0.32000000000000006
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 9,
+            "brier_score": 0.12020000000000002,
+            "mean_confidence": 0.7266666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2733333333333333
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.16950816666666668,
+            "whole_run_bootstrap_95_interval": [
+              0.10415118333333336,
+              0.24294303472222226
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.6869277777777777,
+            "whole_run_bootstrap_95_interval": [
+              0.5853002777777777,
+              0.7736611111111109
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.8,
+            "whole_run_bootstrap_95_interval": [
+              0.6333333333333333,
+              0.9666666666666666
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.11307222222222224,
+            "whole_run_bootstrap_95_interval": [
+              -0.24384236111111118,
+              0.04950444444444404
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "difficulty": "easy",
+      "success": {
+        "0.01": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8,
+          "wilson_95_interval": [
+            0.4901624715366419,
+            0.9433178485456246
+          ]
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 35,
+        "reports_paired": 27,
+        "reports_excluded_no_preceding_solve": 8
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 81,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 9,
+            "brier_score": 0.007333333333333331,
+            "mean_confidence": 0.9377777777777777,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.06222222222222223
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 6,
+            "brier_score": 0.0042,
+            "mean_confidence": 0.9466666666666668,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.053333333333333344
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 15,
+            "brier_score": 0.02292666666666667,
+            "mean_confidence": 0.898,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.10200000000000002
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 6,
+            "brier_score": 0.05723333333333335,
+            "mean_confidence": 0.8333333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.16666666666666666
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 3,
+            "brier_score": 0.0001000000000000002,
+            "mean_confidence": 0.9899999999999999,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.010000000000000009
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 6,
+            "brier_score": 0.09375000000000001,
+            "mean_confidence": 0.7583333333333333,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2416666666666667
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 12,
+            "brier_score": 0.07505,
+            "mean_confidence": 0.8133333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.18666666666666668
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.006799999999999997,
+            "mean_confidence": 0.9422222222222223,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.05777777777777778
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 12,
+            "brier_score": 0.2754166666666667,
+            "mean_confidence": 0.725,
+            "success_fraction": 0.4166666666666667,
+            "signed_calibration_in_the_large_gap": 0.30833333333333335
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 3,
+            "brier_score": 0.010000000000000002,
+            "mean_confidence": 0.10000000000000002,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.10000000000000002
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.055281000000000004,
+            "whole_run_bootstrap_95_interval": [
+              0.015518575000000005,
+              0.111234075
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.7944666666666665,
+            "whole_run_bootstrap_95_interval": [
+              0.6203508333333333,
+              0.9115777777777776
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.8416666666666666,
+            "whole_run_bootstrap_95_interval": [
+              0.6,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.047200000000000006,
+            "whole_run_bootstrap_95_interval": [
+              -0.131645,
+              0.05332222222222223
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "difficulty": "easy",
+      "success": {
+        "0.01": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8,
+          "wilson_95_interval": [
+            0.4901624715366419,
+            0.9433178485456246
+          ]
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 40,
+        "reports_paired": 40,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 120,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 15,
+            "brier_score": 0.08783333333333335,
+            "mean_confidence": 0.75,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.25
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 6,
+            "brier_score": 0.12416666666666669,
+            "mean_confidence": 0.6333333333333334,
+            "success_fraction": 0.8333333333333334,
+            "signed_calibration_in_the_large_gap": -0.20000000000000004
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 15,
+            "brier_score": 0.07216666666666667,
+            "mean_confidence": 0.75,
+            "success_fraction": 0.9333333333333333,
+            "signed_calibration_in_the_large_gap": -0.18333333333333332
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 15,
+            "brier_score": 0.10783333333333335,
+            "mean_confidence": 0.7300000000000001,
+            "success_fraction": 0.9333333333333333,
+            "signed_calibration_in_the_large_gap": -0.20333333333333334
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 15,
+            "brier_score": 0.3601666666666667,
+            "mean_confidence": 0.5833333333333334,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.5833333333333334
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 12,
+            "brier_score": 0.12770833333333334,
+            "mean_confidence": 0.6791666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.32083333333333336
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 15,
+            "brier_score": 0.1115,
+            "mean_confidence": 0.65,
+            "success_fraction": 0.7333333333333333,
+            "signed_calibration_in_the_large_gap": -0.08333333333333333
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.10416666666666667,
+            "mean_confidence": 0.7722222222222221,
+            "success_fraction": 0.8888888888888888,
+            "signed_calibration_in_the_large_gap": -0.11666666666666667
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 9,
+            "brier_score": 0.22666666666666668,
+            "mean_confidence": 0.47777777777777786,
+            "success_fraction": 0.5555555555555556,
+            "signed_calibration_in_the_large_gap": -0.07777777777777778
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 9,
+            "brier_score": 0.028377777777777786,
+            "mean_confidence": 0.8644444444444445,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.1355555555555556
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.13505861111111112,
+            "whole_run_bootstrap_95_interval": [
+              0.0881611388888889,
+              0.19545833333333335
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.6890277777777778,
+            "whole_run_bootstrap_95_interval": [
+              0.6235555555555556,
+              0.7508055555555555
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.7877777777777778,
+            "whole_run_bootstrap_95_interval": [
+              0.5866666666666667,
+              0.9366666666666668
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.09875,
+            "whole_run_bootstrap_95_interval": [
+              -0.21061250000000004,
+              0.06666666666666668
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "difficulty": "easy",
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7,
+          "wilson_95_interval": [
+            0.3967781474611454,
+            0.8922087325936989
+          ]
+        },
+        "0.1": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7,
+          "wilson_95_interval": [
+            0.3967781474611454,
+            0.8922087325936989
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 27,
+        "reports_paired": 26,
+        "reports_excluded_no_preceding_solve": 1
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 78,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 9,
+            "brier_score": 0.649888888888889,
+            "mean_confidence": 0.7977777777777778,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.7977777777777778
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 6,
+            "brier_score": 0.13885,
+            "mean_confidence": 0.6916666666666665,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": 0.19166666666666665
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 9,
+            "brier_score": 0.09504444444444446,
+            "mean_confidence": 0.7311111111111112,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2688888888888889
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.02852222222222222,
+            "mean_confidence": 0.8766666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.12333333333333335
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 9,
+            "brier_score": 0.03986666666666666,
+            "mean_confidence": 0.8177777777777778,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.18222222222222223
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 6,
+            "brier_score": 0.3169666666666667,
+            "mean_confidence": 0.71,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.3766666666666667
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 6,
+            "brier_score": 0.3861666666666667,
+            "mean_confidence": 0.8233333333333334,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.49000000000000005
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.10786666666666667,
+            "mean_confidence": 0.6888888888888888,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3111111111111111
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 6,
+            "brier_score": 0.2999666666666667,
+            "mean_confidence": 0.5333333333333333,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.5333333333333333
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 9,
+            "brier_score": 0.11075555555555555,
+            "mean_confidence": 0.7022222222222223,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2977777777777778
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.21738944444444447,
+            "whole_run_bootstrap_95_interval": [
+              0.11413844444444443,
+              0.34235001388888875
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.7372777777777777,
+            "whole_run_bootstrap_95_interval": [
+              0.6767208333333333,
+              0.7915569444444445
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.6166666666666666,
+            "whole_run_bootstrap_95_interval": [
+              0.35,
+              0.8666666666666666
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": 0.12061111111111114,
+            "whole_run_bootstrap_95_interval": [
+              -0.11005833333333334,
+              0.36872222222222223
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3.1-pro-preview",
+      "difficulty": "medium",
+      "success": {
+        "0.01": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 36,
+        "reports_paired": 36,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 108,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 6,
+            "brier_score": 0.125,
+            "mean_confidence": 0.75,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.25
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 9,
+            "brier_score": 0.2733333333333334,
+            "mean_confidence": 0.6666666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3333333333333333
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 12,
+            "brier_score": 0.20502500000000004,
+            "mean_confidence": 0.7475,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.25249999999999995
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.2733333333333334,
+            "mean_confidence": 0.6666666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3333333333333333
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 12,
+            "brier_score": 0.063175,
+            "mean_confidence": 0.8575,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.14250000000000002
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 18,
+            "brier_score": 0.19805555555555554,
+            "mean_confidence": 0.6666666666666666,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": -2.4671622769447922e-17
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 9,
+            "brier_score": 0.2733333333333334,
+            "mean_confidence": 0.6666666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3333333333333333
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.2733333333333334,
+            "mean_confidence": 0.6666666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3333333333333333
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 12,
+            "brier_score": 0.21315000000000006,
+            "mean_confidence": 0.71,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.29
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.22671666666666676,
+            "mean_confidence": 0.695,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.305
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.2124455555555556,
+            "whole_run_bootstrap_95_interval": [
+              0.16824472222222225,
+              0.25046388888888893
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.7093333333333333,
+            "whole_run_bootstrap_95_interval": [
+              0.6778333333333334,
+              0.749
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.9666666666666666,
+            "whole_run_bootstrap_95_interval": [
+              0.9,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.2573333333333333,
+            "whole_run_bootstrap_95_interval": [
+              -0.312,
+              -0.18666666666666665
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "claude-opus-4-6",
+      "difficulty": "medium",
+      "success": {
+        "0.01": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 40,
+        "reports_paired": 40,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 120,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 6,
+            "brier_score": 0.2533333333333333,
+            "mean_confidence": 0.6,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.4000000000000001
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 12,
+            "brier_score": 0.19801666666666665,
+            "mean_confidence": 0.6466666666666666,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.35333333333333333
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 15,
+            "brier_score": 0.18099999999999997,
+            "mean_confidence": 0.6333333333333333,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3666666666666666
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.1602777777777778,
+            "mean_confidence": 0.7277777777777779,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2722222222222222
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 3,
+            "brier_score": 0.08166666666666668,
+            "mean_confidence": 0.7333333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.26666666666666666
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 21,
+            "brier_score": 0.41952380952380963,
+            "mean_confidence": 0.2857142857142857,
+            "success_fraction": 0.8095238095238095,
+            "signed_calibration_in_the_large_gap": -0.5238095238095238
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 12,
+            "brier_score": 0.4070833333333333,
+            "mean_confidence": 0.3833333333333333,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.6166666666666667
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 21,
+            "brier_score": 0.27547619047619054,
+            "mean_confidence": 0.5095238095238096,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.4904761904761904
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 12,
+            "brier_score": 0.2572916666666667,
+            "mean_confidence": 0.3541666666666667,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": -0.14583333333333334
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 9,
+            "brier_score": 0.19673333333333334,
+            "mean_confidence": 0.7377777777777779,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.26222222222222225
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.2430402777777778,
+            "whole_run_bootstrap_95_interval": [
+              0.18330077083333335,
+              0.306994568452381
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.5611626984126985,
+            "whole_run_bootstrap_95_interval": [
+              0.4598127976190476,
+              0.6559527777777777
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.930952380952381,
+            "whole_run_bootstrap_95_interval": [
+              0.830952380952381,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.3697896825396826,
+            "whole_run_bootstrap_95_interval": [
+              -0.4552706349206349,
+              -0.28746359126984133
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5.4",
+      "difficulty": "medium",
+      "success": {
+        "0.01": {
+          "count": 3,
+          "n": 10,
+          "rate": 0.3,
+          "wilson_95_interval": [
+            0.10779126740630107,
+            0.6032218525388545
+          ]
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 60,
+        "reports_paired": 54,
+        "reports_excluded_no_preceding_solve": 6
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 162,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 24,
+            "brier_score": 0.04360833333333334,
+            "mean_confidence": 0.8325,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.1675
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 18,
+            "brier_score": 0.1749888888888889,
+            "mean_confidence": 0.6166666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.38333333333333336
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 15,
+            "brier_score": 0.1850333333333333,
+            "mean_confidence": 0.6073333333333333,
+            "success_fraction": 0.9333333333333333,
+            "signed_calibration_in_the_large_gap": -0.32599999999999996
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 12,
+            "brier_score": 0.10418333333333335,
+            "mean_confidence": 0.505,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": -0.16166666666666668
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 9,
+            "brier_score": 0.1285,
+            "mean_confidence": 0.6922222222222222,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3077777777777778
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 18,
+            "brier_score": 0.17254444444444447,
+            "mean_confidence": 0.4666666666666667,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": -0.03333333333333333
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 18,
+            "brier_score": 0.2795944444444445,
+            "mean_confidence": 0.6905555555555556,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": 0.19055555555555553
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 15,
+            "brier_score": 0.12482000000000001,
+            "mean_confidence": 0.6419999999999999,
+            "success_fraction": 0.8666666666666667,
+            "signed_calibration_in_the_large_gap": -0.22466666666666668
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 15,
+            "brier_score": 0.35026666666666667,
+            "mean_confidence": 0.7066666666666667,
+            "success_fraction": 0.2,
+            "signed_calibration_in_the_large_gap": 0.5066666666666667
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 18,
+            "brier_score": 0.27576111111111107,
+            "mean_confidence": 0.5027777777777778,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.4972222222222222
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.18393005555555558,
+            "whole_run_bootstrap_95_interval": [
+              0.13213490833333333,
+              0.23977413888888888
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.6262388888888889,
+            "whole_run_bootstrap_95_interval": [
+              0.5615325,
+              0.692933472222222
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.7666666666666667,
+            "whole_run_bootstrap_95_interval": [
+              0.5900000000000001,
+              0.9233333333333335
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.14042777777777776,
+            "whole_run_bootstrap_95_interval": [
+              -0.2994844444444445,
+              0.04794527777777773
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "difficulty": "medium",
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7,
+          "wilson_95_interval": [
+            0.3967781474611454,
+            0.8922087325936989
+          ]
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 60,
+        "reports_paired": 56,
+        "reports_excluded_no_preceding_solve": 4
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 168,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 9,
+            "brier_score": 0.032600000000000004,
+            "mean_confidence": 0.8555555555555556,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.14444444444444446
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 24,
+            "brier_score": 0.43768333333333326,
+            "mean_confidence": 0.8766666666666666,
+            "success_fraction": 0.4166666666666667,
+            "signed_calibration_in_the_large_gap": 0.45999999999999996
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 24,
+            "brier_score": 0.05116666666666667,
+            "mean_confidence": 0.8466666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.15333333333333332
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 12,
+            "brier_score": 0.224625,
+            "mean_confidence": 0.6475000000000001,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3525
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 21,
+            "brier_score": 0.3558333333333333,
+            "mean_confidence": 0.7547619047619046,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.4214285714285713
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 12,
+            "brier_score": 0.30854166666666666,
+            "mean_confidence": 0.48750000000000004,
+            "success_fraction": 0.08333333333333333,
+            "signed_calibration_in_the_large_gap": 0.40416666666666673
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 12,
+            "brier_score": 0.15312499999999998,
+            "mean_confidence": 0.6791666666666667,
+            "success_fraction": 0.8333333333333334,
+            "signed_calibration_in_the_large_gap": -0.15416666666666667
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 12,
+            "brier_score": 0.12028333333333334,
+            "mean_confidence": 0.725,
+            "success_fraction": 0.5833333333333334,
+            "signed_calibration_in_the_large_gap": 0.1416666666666667
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 30,
+            "brier_score": 0.04234333333333333,
+            "mean_confidence": 0.8943333333333331,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.10566666666666663
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.33666666666666667,
+            "mean_confidence": 0.7083333333333334,
+            "success_fraction": 0.25,
+            "signed_calibration_in_the_large_gap": 0.45833333333333326
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.20628683333333334,
+            "whole_run_bootstrap_95_interval": [
+              0.12124674166666664,
+              0.29511333333333334
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.7475484126984127,
+            "whole_run_bootstrap_95_interval": [
+              0.6703649007936507,
+              0.8172033928571428
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.65,
+            "whole_run_bootstrap_95_interval": [
+              0.4333333333333333,
+              0.85
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": 0.09754841269841268,
+            "whole_run_bootstrap_95_interval": [
+              -0.08380492063492063,
+              0.28399392857142847
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "difficulty": "medium",
+      "success": {
+        "0.01": {
+          "count": 6,
+          "n": 10,
+          "rate": 0.6,
+          "wilson_95_interval": [
+            0.3126737697336583,
+            0.8318196702937637
+          ]
+        },
+        "0.1": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8,
+          "wilson_95_interval": [
+            0.4901624715366419,
+            0.9433178485456246
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 54,
+        "reports_paired": 54,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 162,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 21,
+            "brier_score": 0.12799523809523808,
+            "mean_confidence": 0.7347619047619048,
+            "success_fraction": 0.8095238095238095,
+            "signed_calibration_in_the_large_gap": -0.07476190476190475
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 18,
+            "brier_score": 0.21597222222222223,
+            "mean_confidence": 0.5083333333333333,
+            "success_fraction": 0.7222222222222222,
+            "signed_calibration_in_the_large_gap": -0.21388888888888888
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 18,
+            "brier_score": 0.2023611111111111,
+            "mean_confidence": 0.5916666666666667,
+            "success_fraction": 0.8888888888888888,
+            "signed_calibration_in_the_large_gap": -0.2972222222222223
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 12,
+            "brier_score": 0.10979166666666668,
+            "mean_confidence": 0.6458333333333334,
+            "success_fraction": 0.8333333333333334,
+            "signed_calibration_in_the_large_gap": -0.1875
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 15,
+            "brier_score": 0.30333333333333334,
+            "mean_confidence": 0.5133333333333333,
+            "success_fraction": 0.26666666666666666,
+            "signed_calibration_in_the_large_gap": 0.24666666666666667
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 18,
+            "brier_score": 0.315,
+            "mean_confidence": 0.6555555555555556,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": -0.011111111111111115
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 21,
+            "brier_score": 0.08071428571428572,
+            "mean_confidence": 0.7333333333333334,
+            "success_fraction": 0.8571428571428571,
+            "signed_calibration_in_the_large_gap": -0.12380952380952379
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 12,
+            "brier_score": 0.3964583333333334,
+            "mean_confidence": 0.6041666666666666,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.6041666666666666
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 12,
+            "brier_score": 0.2316666666666666,
+            "mean_confidence": 0.7416666666666667,
+            "success_fraction": 0.75,
+            "signed_calibration_in_the_large_gap": -0.00833333333333335
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 15,
+            "brier_score": 0.15383333333333332,
+            "mean_confidence": 0.7166666666666667,
+            "success_fraction": 0.8,
+            "signed_calibration_in_the_large_gap": -0.08333333333333333
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.21371261904761907,
+            "whole_run_bootstrap_95_interval": [
+              0.15627076686507935,
+              0.2741978819444444
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.644531746031746,
+            "whole_run_bootstrap_95_interval": [
+              0.5905826388888891,
+              0.695087400793651
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.6594444444444444,
+            "whole_run_bootstrap_95_interval": [
+              0.4703968253968254,
+              0.8072222222222221
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.014912698412698423,
+            "whole_run_bootstrap_95_interval": [
+              -0.14999702380952382,
+              0.15355565476190472
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "difficulty": "medium",
+      "success": {
+        "0.01": {
+          "count": 4,
+          "n": 10,
+          "rate": 0.4,
+          "wilson_95_interval": [
+            0.16818032970623614,
+            0.6873262302663417
+          ]
+        },
+        "0.1": {
+          "count": 5,
+          "n": 10,
+          "rate": 0.5,
+          "wilson_95_interval": [
+            0.23659309051256405,
+            0.763406909487436
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 24,
+        "reports_paired": 23,
+        "reports_excluded_no_preceding_solve": 1
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 69,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 6,
+            "brier_score": 0.4128,
+            "mean_confidence": 0.8133333333333334,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.48
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 9,
+            "brier_score": 0.1275888888888889,
+            "mean_confidence": 0.741111111111111,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": 0.07444444444444444
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 9,
+            "brier_score": 0.015077777777777777,
+            "mean_confidence": 0.8877777777777778,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.11222222222222222
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 6,
+            "brier_score": 0.1750666666666667,
+            "mean_confidence": 0.5933333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.40666666666666673
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 3,
+            "brier_score": 0.7414666666666667,
+            "mean_confidence": 0.86,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.86
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 12,
+            "brier_score": 0.4570666666666667,
+            "mean_confidence": 0.6616666666666666,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.6616666666666666
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 6,
+            "brier_score": 0.1939,
+            "mean_confidence": 0.6133333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.38666666666666655
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 6,
+            "brier_score": 0.29101666666666665,
+            "mean_confidence": 0.7983333333333332,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": 0.13166666666666665
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 6,
+            "brier_score": 0.09541666666666666,
+            "mean_confidence": 0.7183333333333333,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2816666666666666
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 6,
+            "brier_score": 0.39376666666666665,
+            "mean_confidence": 0.6166666666666666,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.6166666666666666
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.29031666666666667,
+            "whole_run_bootstrap_95_interval": [
+              0.1726871388888889,
+              0.4239044444444445
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.730388888888889,
+            "whole_run_bootstrap_95_interval": [
+              0.6689444444444443,
+              0.7944444444444444
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.5666666666666667,
+            "whole_run_bootstrap_95_interval": [
+              0.3,
+              0.8333333333333333
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": 0.16372222222222219,
+            "whole_run_bootstrap_95_interval": [
+              -0.1075013888888889,
+              0.44300416666666625
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3.1-pro-preview",
+      "difficulty": "hard",
+      "success": {
+        "0.01": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0,
+          "wilson_95_interval": [
+            0.7224672001371109,
+            1.0
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 38,
+        "reports_paired": 38,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 114,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 12,
+            "brier_score": 0.18252500000000002,
+            "mean_confidence": 0.6725,
+            "success_fraction": 0.9166666666666666,
+            "signed_calibration_in_the_large_gap": -0.24416666666666664
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 9,
+            "brier_score": 0.27003333333333335,
+            "mean_confidence": 0.6966666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.30333333333333334
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 9,
+            "brier_score": 0.30254444444444445,
+            "mean_confidence": 0.6477777777777778,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3522222222222222
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 12,
+            "brier_score": 0.20252500000000004,
+            "mean_confidence": 0.7725,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2275
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 9,
+            "brier_score": 0.27003333333333335,
+            "mean_confidence": 0.6966666666666667,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.30333333333333334
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 9,
+            "brier_score": 0.22114444444444448,
+            "mean_confidence": 0.49666666666666665,
+            "success_fraction": 0.7777777777777778,
+            "signed_calibration_in_the_large_gap": -0.28111111111111114
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 9,
+            "brier_score": 0.27336666666666676,
+            "mean_confidence": 0.6633333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.3366666666666666
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.27,
+            "mean_confidence": 0.7,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.30000000000000004
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 21,
+            "brier_score": 0.148,
+            "mean_confidence": 0.6914285714285715,
+            "success_fraction": 0.9047619047619048,
+            "signed_calibration_in_the_large_gap": -0.21333333333333335
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 15,
+            "brier_score": 0.22002000000000005,
+            "mean_confidence": 0.6780000000000002,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.32199999999999995
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.23601922222222224,
+            "whole_run_bootstrap_95_interval": [
+              0.20653108194444444,
+              0.2636084444444444
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.6715539682539682,
+            "whole_run_bootstrap_95_interval": [
+              0.6256277777777779,
+              0.7070539682539683
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.959920634920635,
+            "whole_run_bootstrap_95_interval": [
+              0.9111111111111111,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.2883666666666667,
+            "whole_run_bootstrap_95_interval": [
+              -0.315,
+              -0.2605277777777778
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "claude-opus-4-6",
+      "difficulty": "hard",
+      "success": {
+        "0.01": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8,
+          "wilson_95_interval": [
+            0.4901624715366419,
+            0.9433178485456246
+          ]
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9,
+          "wilson_95_interval": [
+            0.5958499732047616,
+            0.982123786904927
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 47,
+        "reports_paired": 47,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 141,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 15,
+            "brier_score": 0.25816666666666666,
+            "mean_confidence": 0.5633333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.4366666666666666
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 12,
+            "brier_score": 0.18437499999999998,
+            "mean_confidence": 0.6875,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.31250000000000006
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 15,
+            "brier_score": 0.47300000000000003,
+            "mean_confidence": 0.26,
+            "success_fraction": 0.8666666666666667,
+            "signed_calibration_in_the_large_gap": -0.6066666666666667
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.2041666666666667,
+            "mean_confidence": 0.6499999999999999,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.35000000000000003
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 9,
+            "brier_score": 0.3152777777777778,
+            "mean_confidence": 0.5277777777777778,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.4722222222222222
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 9,
+            "brier_score": 0.3294444444444445,
+            "mean_confidence": 0.34444444444444444,
+            "success_fraction": 0.7777777777777778,
+            "signed_calibration_in_the_large_gap": -0.43333333333333335
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 24,
+            "brier_score": 0.3255208333333333,
+            "mean_confidence": 0.4395833333333334,
+            "success_fraction": 0.9583333333333334,
+            "signed_calibration_in_the_large_gap": -0.5187499999999999
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 15,
+            "brier_score": 0.21150000000000002,
+            "mean_confidence": 0.5966666666666668,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.40333333333333327
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 21,
+            "brier_score": 0.324047619047619,
+            "mean_confidence": 0.4476190476190477,
+            "success_fraction": 0.9523809523809523,
+            "signed_calibration_in_the_large_gap": -0.5047619047619047
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.2147916666666667,
+            "mean_confidence": 0.2791666666666667,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": -0.22083333333333333
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.28402906746031753,
+            "whole_run_bootstrap_95_interval": [
+              0.2363851810515873,
+              0.33834116815476184
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.47960912698412705,
+            "whole_run_bootstrap_95_interval": [
+              0.3909558531746032,
+              0.5674166666666667
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.905515873015873,
+            "whole_run_bootstrap_95_interval": [
+              0.8007539682539683,
+              0.9824999999999999
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.42590674603174605,
+            "whole_run_bootstrap_95_interval": [
+              -0.4895598710317459,
+              -0.35938794642857147
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5.4",
+      "difficulty": "hard",
+      "success": {
+        "0.01": {
+          "count": 1,
+          "n": 10,
+          "rate": 0.1,
+          "wilson_95_interval": [
+            0.01787621309507295,
+            0.40415002679523837
+          ]
+        },
+        "0.1": {
+          "count": 1,
+          "n": 10,
+          "rate": 0.1,
+          "wilson_95_interval": [
+            0.01787621309507295,
+            0.40415002679523837
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 58,
+        "reports_paired": 56,
+        "reports_excluded_no_preceding_solve": 2
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 168,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 18,
+            "brier_score": 0.31622222222222224,
+            "mean_confidence": 0.7255555555555555,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.3922222222222222
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 15,
+            "brier_score": 0.22961333333333334,
+            "mean_confidence": 0.6573333333333332,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.32400000000000007
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 15,
+            "brier_score": 0.18690666666666667,
+            "mean_confidence": 0.6173333333333333,
+            "success_fraction": 0.4666666666666667,
+            "signed_calibration_in_the_large_gap": 0.15066666666666664
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.1509111111111111,
+            "mean_confidence": 0.4888888888888888,
+            "success_fraction": 0.5555555555555556,
+            "signed_calibration_in_the_large_gap": -0.06666666666666668
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 21,
+            "brier_score": 0.2827333333333334,
+            "mean_confidence": 0.2885714285714286,
+            "success_fraction": 0.6666666666666666,
+            "signed_calibration_in_the_large_gap": -0.3780952380952381
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 21,
+            "brier_score": 0.17519047619047623,
+            "mean_confidence": 0.42190476190476195,
+            "success_fraction": 0.42857142857142855,
+            "signed_calibration_in_the_large_gap": -0.006666666666666675
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 21,
+            "brier_score": 0.11239523809523808,
+            "mean_confidence": 0.4080952380952381,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.07476190476190477
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 15,
+            "brier_score": 0.19026666666666667,
+            "mean_confidence": 0.3293333333333333,
+            "success_fraction": 0.4666666666666667,
+            "signed_calibration_in_the_large_gap": -0.1373333333333333
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 18,
+            "brier_score": 0.5524777777777776,
+            "mean_confidence": 0.7933333333333332,
+            "success_fraction": 0.1111111111111111,
+            "signed_calibration_in_the_large_gap": 0.6822222222222221
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 15,
+            "brier_score": 0.17762666666666668,
+            "mean_confidence": 0.3613333333333334,
+            "success_fraction": 0.06666666666666667,
+            "signed_calibration_in_the_large_gap": 0.2946666666666666
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.23743434920634923,
+            "whole_run_bootstrap_95_interval": [
+              0.17533539682539684,
+              0.32067142539682536
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.5091682539682539,
+            "whole_run_bootstrap_95_interval": [
+              0.4069486507936508,
+              0.6159026190476186
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.3761904761904762,
+            "whole_run_bootstrap_95_interval": [
+              0.2628571428571429,
+              0.4822222222222223
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": 0.13297777777777778,
+            "whole_run_bootstrap_95_interval": [
+              -0.04608682539682538,
+              0.31512650793650765
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "difficulty": "hard",
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7,
+          "wilson_95_interval": [
+            0.3967781474611454,
+            0.8922087325936989
+          ]
+        },
+        "0.1": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8,
+          "wilson_95_interval": [
+            0.4901624715366419,
+            0.9433178485456246
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 39,
+        "reports_paired": 37,
+        "reports_excluded_no_preceding_solve": 2
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 9,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [
+          8
+        ],
+        "coefficient_observations": 111,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 9,
+            "brier_score": 0.06034444444444444,
+            "mean_confidence": 0.8344444444444444,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.16555555555555554
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 18,
+            "brier_score": 0.09773888888888889,
+            "mean_confidence": 0.7983333333333333,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.20166666666666666
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 21,
+            "brier_score": 0.49846666666666667,
+            "mean_confidence": 0.678095238095238,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.678095238095238
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 12,
+            "brier_score": 0.06217499999999999,
+            "mean_confidence": 0.8525,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.14750000000000002
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 12,
+            "brier_score": 0.07154999999999999,
+            "mean_confidence": 0.84,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.16
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 9,
+            "brier_score": 0.14583333333333334,
+            "mean_confidence": 0.5277777777777777,
+            "success_fraction": 0.5555555555555556,
+            "signed_calibration_in_the_large_gap": -0.027777777777777773
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 9,
+            "brier_score": 0.12167777777777777,
+            "mean_confidence": 0.7322222222222222,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.2677777777777778
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 9,
+            "brier_score": 0.0452888888888889,
+            "mean_confidence": 0.8377777777777777,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.1622222222222222
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.035775,
+            "mean_confidence": 0.8374999999999999,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.1625
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.1265388888888889,
+            "whole_run_bootstrap_95_interval": [
+              0.06285341049382716,
+              0.22586820987654319
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.7709611992945327,
+            "whole_run_bootstrap_95_interval": [
+              0.6984285714285714,
+              0.829043209876543
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.8395061728395061,
+            "whole_run_bootstrap_95_interval": [
+              0.6172839506172839,
+              1.0
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": -0.06854497354497356,
+            "whole_run_bootstrap_95_interval": [
+              -0.19098765432098766,
+              0.12970998677248627
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "difficulty": "hard",
+      "success": {
+        "0.01": {
+          "count": 0,
+          "n": 10,
+          "rate": 0.0,
+          "wilson_95_interval": [
+            0.0,
+            0.27753279986288903
+          ]
+        },
+        "0.1": {
+          "count": 1,
+          "n": 10,
+          "rate": 0.1,
+          "wilson_95_interval": [
+            0.01787621309507295,
+            0.40415002679523837
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 55,
+        "reports_paired": 55,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 165,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 15,
+            "brier_score": 0.22933333333333333,
+            "mean_confidence": 0.5466666666666666,
+            "success_fraction": 0.26666666666666666,
+            "signed_calibration_in_the_large_gap": 0.28
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 12,
+            "brier_score": 0.13354166666666667,
+            "mean_confidence": 0.6875,
+            "success_fraction": 0.75,
+            "signed_calibration_in_the_large_gap": -0.0625
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 12,
+            "brier_score": 0.17979166666666668,
+            "mean_confidence": 0.6291666666666668,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": 0.12916666666666665
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 21,
+            "brier_score": 0.23773809523809528,
+            "mean_confidence": 0.6404761904761906,
+            "success_fraction": 0.38095238095238093,
+            "signed_calibration_in_the_large_gap": 0.2595238095238096
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 15,
+            "brier_score": 0.2273333333333333,
+            "mean_confidence": 0.6466666666666667,
+            "success_fraction": 0.4666666666666667,
+            "signed_calibration_in_the_large_gap": 0.18000000000000002
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 24,
+            "brier_score": 0.21156250000000001,
+            "mean_confidence": 0.5104166666666666,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": 0.010416666666666666
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 24,
+            "brier_score": 0.17479166666666668,
+            "mean_confidence": 0.5791666666666667,
+            "success_fraction": 0.5,
+            "signed_calibration_in_the_large_gap": 0.07916666666666666
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 15,
+            "brier_score": 0.189,
+            "mean_confidence": 0.42000000000000004,
+            "success_fraction": 0.2,
+            "signed_calibration_in_the_large_gap": 0.22
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 15,
+            "brier_score": 0.2886666666666667,
+            "mean_confidence": 0.6533333333333334,
+            "success_fraction": 0.26666666666666666,
+            "signed_calibration_in_the_large_gap": 0.38666666666666666
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 12,
+            "brier_score": 0.31875,
+            "mean_confidence": 0.525,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.525
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.21905089285714285,
+            "whole_run_bootstrap_95_interval": [
+              0.18841036458333338,
+              0.2526042410714286
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.5838392857142858,
+            "whole_run_bootstrap_95_interval": [
+              0.5329991071428571,
+              0.629846130952381
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.38309523809523804,
+            "whole_run_bootstrap_95_interval": [
+              0.25809523809523804,
+              0.503095238095238
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": 0.20074404761904763,
+            "whole_run_bootstrap_95_interval": [
+              0.10065967261904762,
+              0.30711919642857144
+            ]
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "difficulty": "hard",
+      "success": {
+        "0.01": {
+          "count": 2,
+          "n": 10,
+          "rate": 0.2,
+          "wilson_95_interval": [
+            0.056682151454375274,
+            0.5098375284633582
+          ]
+        },
+        "0.1": {
+          "count": 2,
+          "n": 10,
+          "rate": 0.2,
+          "wilson_95_interval": [
+            0.056682151454375274,
+            0.5098375284633582
+          ]
+        }
+      },
+      "confidence_report_support": {
+        "reports": 22,
+        "reports_paired": 22,
+        "reports_excluded_no_preceding_solve": 0
+      },
+      "confidence": {
+        "n_total_runs": 10,
+        "n_runs_with_paired_reports": 10,
+        "seeds_with_paired_reports": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "seeds_without_paired_reports": [],
+        "coefficient_observations": 66,
+        "runs": [
+          {
+            "seed": 1,
+            "coefficient_observations": 6,
+            "brier_score": 0.2225666666666667,
+            "mean_confidence": 0.6066666666666667,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.2733333333333334
+          },
+          {
+            "seed": 2,
+            "coefficient_observations": 6,
+            "brier_score": 0.44013333333333327,
+            "mean_confidence": 0.8466666666666667,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.5133333333333333
+          },
+          {
+            "seed": 3,
+            "coefficient_observations": 6,
+            "brier_score": 0.5916,
+            "mean_confidence": 0.7666666666666666,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.7666666666666666
+          },
+          {
+            "seed": 4,
+            "coefficient_observations": 9,
+            "brier_score": 0.04264444444444444,
+            "mean_confidence": 0.8133333333333334,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.18666666666666665
+          },
+          {
+            "seed": 5,
+            "coefficient_observations": 6,
+            "brier_score": 0.18166666666666664,
+            "mean_confidence": 0.6000000000000001,
+            "success_fraction": 1.0,
+            "signed_calibration_in_the_large_gap": -0.39999999999999997
+          },
+          {
+            "seed": 6,
+            "coefficient_observations": 6,
+            "brier_score": 0.3971,
+            "mean_confidence": 0.7966666666666667,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.4633333333333334
+          },
+          {
+            "seed": 7,
+            "coefficient_observations": 6,
+            "brier_score": 0.41463333333333335,
+            "mean_confidence": 0.6566666666666666,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.3233333333333333
+          },
+          {
+            "seed": 8,
+            "coefficient_observations": 9,
+            "brier_score": 0.10500000000000002,
+            "mean_confidence": 0.2888888888888889,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.2888888888888889
+          },
+          {
+            "seed": 9,
+            "coefficient_observations": 6,
+            "brier_score": 0.4016333333333333,
+            "mean_confidence": 0.7133333333333334,
+            "success_fraction": 0.3333333333333333,
+            "signed_calibration_in_the_large_gap": 0.38000000000000006
+          },
+          {
+            "seed": 10,
+            "coefficient_observations": 6,
+            "brier_score": 0.6588999999999999,
+            "mean_confidence": 0.7966666666666667,
+            "success_fraction": 0.0,
+            "signed_calibration_in_the_large_gap": 0.7966666666666667
+          }
+        ],
+        "run_balanced": {
+          "brier_score": {
+            "estimate": 0.34558777777777777,
+            "whole_run_bootstrap_95_interval": [
+              0.22659691666666665,
+              0.4641179999999999
+            ]
+          },
+          "mean_confidence": {
+            "estimate": 0.6885555555555556,
+            "whole_run_bootstrap_95_interval": [
+              0.581663888888889,
+              0.7729999999999999
+            ]
+          },
+          "success_fraction": {
+            "estimate": 0.36666666666666664,
+            "whole_run_bootstrap_95_interval": [
+              0.16666666666666666,
+              0.6
+            ]
+          },
+          "signed_calibration_in_the_large_gap": {
+            "estimate": 0.32188888888888895,
+            "whole_run_bootstrap_95_interval": [
+              0.08733333333333335,
+              0.5281194444444438
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "pairwise_success_comparisons": [
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "claude-opus-4-6",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 10,
+      "first_only_successes": 0,
+      "second_only_successes": 0,
+      "both_successes": 10,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.0,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.0
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gpt-5.4",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 0,
+      "both_successes": 7,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.6
+      ],
+      "exact_p_two_sided": 0.25,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 8,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 8,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 8,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 8,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 0,
+      "both_successes": 7,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.6
+      ],
+      "exact_p_two_sided": 0.25,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gpt-5.4",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 0,
+      "both_successes": 7,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.6
+      ],
+      "exact_p_two_sided": 0.25,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 8,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 8,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "claude-opus-4-6",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 8,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 8,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 0,
+      "both_successes": 7,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.6
+      ],
+      "exact_p_two_sided": 0.25,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gpt-5.4",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 8,
+      "first_only_successes": 1,
+      "second_only_successes": 2,
+      "both_successes": 6,
+      "neither_successes": 1,
+      "success_rate_difference_first_minus_second": -0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.4,
+        0.2
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gpt-5.4",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 8,
+      "first_only_successes": 0,
+      "second_only_successes": 1,
+      "both_successes": 7,
+      "neither_successes": 2,
+      "success_rate_difference_first_minus_second": -0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.0
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gpt-5.4",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 3,
+      "both_successes": 4,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.0,
+      "paired_task_bootstrap_95_interval": [
+        -0.5,
+        0.5
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3-flash-preview",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 8,
+      "first_only_successes": 1,
+      "second_only_successes": 1,
+      "both_successes": 7,
+      "neither_successes": 1,
+      "success_rate_difference_first_minus_second": 0.0,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.3
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "gemini-3-flash-preview",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 2,
+      "both_successes": 5,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.5
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "easy",
+      "first_model": "claude-sonnet-4-20250514",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 2,
+      "both_successes": 5,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.5
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "claude-opus-4-6",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 9,
+      "first_only_successes": 1,
+      "second_only_successes": 1,
+      "both_successes": 8,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.0,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.3
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gpt-5.4",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 3,
+      "first_only_successes": 7,
+      "second_only_successes": 1,
+      "both_successes": 2,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.6,
+      "paired_task_bootstrap_95_interval": [
+        0.19750000000000228,
+        1.0
+      ],
+      "exact_p_two_sided": 0.0703125,
+      "holm_adjusted_p_within_difficulty": 0.9140625
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 7,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 7,
+      "neither_successes": 1,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 6,
+      "first_only_successes": 4,
+      "second_only_successes": 1,
+      "both_successes": 5,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        -0.1,
+        0.7
+      ],
+      "exact_p_two_sided": 0.375,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 4,
+      "first_only_successes": 5,
+      "second_only_successes": 0,
+      "both_successes": 4,
+      "neither_successes": 1,
+      "success_rate_difference_first_minus_second": 0.5,
+      "paired_task_bootstrap_95_interval": [
+        0.2,
+        0.8
+      ],
+      "exact_p_two_sided": 0.0625,
+      "holm_adjusted_p_within_difficulty": 0.875
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gpt-5.4",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 3,
+      "first_only_successes": 6,
+      "second_only_successes": 0,
+      "both_successes": 3,
+      "neither_successes": 1,
+      "success_rate_difference_first_minus_second": 0.6,
+      "paired_task_bootstrap_95_interval": [
+        0.3,
+        0.9
+      ],
+      "exact_p_two_sided": 0.03125,
+      "holm_adjusted_p_within_difficulty": 0.46875
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 1,
+      "both_successes": 6,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        -0.2,
+        0.6
+      ],
+      "exact_p_two_sided": 0.625,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "claude-opus-4-6",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 6,
+      "first_only_successes": 4,
+      "second_only_successes": 1,
+      "both_successes": 5,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        -0.1,
+        0.7
+      ],
+      "exact_p_two_sided": 0.375,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 9,
+      "second_successes": 4,
+      "first_only_successes": 6,
+      "second_only_successes": 1,
+      "both_successes": 3,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.5,
+      "paired_task_bootstrap_95_interval": [
+        0.1,
+        0.9
+      ],
+      "exact_p_two_sided": 0.125,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gpt-5.4",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 3,
+      "second_successes": 7,
+      "first_only_successes": 1,
+      "second_only_successes": 5,
+      "both_successes": 2,
+      "neither_successes": 2,
+      "success_rate_difference_first_minus_second": -0.4,
+      "paired_task_bootstrap_95_interval": [
+        -0.8,
+        0.0
+      ],
+      "exact_p_two_sided": 0.21875,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gpt-5.4",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 3,
+      "second_successes": 6,
+      "first_only_successes": 1,
+      "second_only_successes": 4,
+      "both_successes": 2,
+      "neither_successes": 3,
+      "success_rate_difference_first_minus_second": -0.3,
+      "paired_task_bootstrap_95_interval": [
+        -0.7,
+        0.1
+      ],
+      "exact_p_two_sided": 0.375,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gpt-5.4",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 3,
+      "second_successes": 4,
+      "first_only_successes": 2,
+      "second_only_successes": 3,
+      "both_successes": 1,
+      "neither_successes": 4,
+      "success_rate_difference_first_minus_second": -0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.5,
+        0.3
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3-flash-preview",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 6,
+      "first_only_successes": 3,
+      "second_only_successes": 2,
+      "both_successes": 4,
+      "neither_successes": 1,
+      "success_rate_difference_first_minus_second": 0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.5
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "gemini-3-flash-preview",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 4,
+      "first_only_successes": 3,
+      "second_only_successes": 0,
+      "both_successes": 4,
+      "neither_successes": 3,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.6
+      ],
+      "exact_p_two_sided": 0.25,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "medium",
+      "first_model": "claude-sonnet-4-20250514",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 6,
+      "second_successes": 4,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 4,
+      "neither_successes": 4,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "claude-opus-4-6",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 8,
+      "first_only_successes": 2,
+      "second_only_successes": 0,
+      "both_successes": 8,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.2,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.5
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gpt-5.4",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 1,
+      "first_only_successes": 9,
+      "second_only_successes": 0,
+      "both_successes": 1,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.9,
+      "paired_task_bootstrap_95_interval": [
+        0.7,
+        1.0
+      ],
+      "exact_p_two_sided": 0.00390625,
+      "holm_adjusted_p_within_difficulty": 0.0546875
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 0,
+      "both_successes": 7,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.3,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.6
+      ],
+      "exact_p_two_sided": 0.25,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 0,
+      "first_only_successes": 10,
+      "second_only_successes": 0,
+      "both_successes": 0,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 1.0,
+      "paired_task_bootstrap_95_interval": [
+        1.0,
+        1.0
+      ],
+      "exact_p_two_sided": 0.001953125,
+      "holm_adjusted_p_within_difficulty": 0.029296875
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3.1-pro-preview",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 10,
+      "second_successes": 2,
+      "first_only_successes": 8,
+      "second_only_successes": 0,
+      "both_successes": 2,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.8,
+      "paired_task_bootstrap_95_interval": [
+        0.5,
+        1.0
+      ],
+      "exact_p_two_sided": 0.0078125,
+      "holm_adjusted_p_within_difficulty": 0.1015625
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gpt-5.4",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 1,
+      "first_only_successes": 7,
+      "second_only_successes": 0,
+      "both_successes": 1,
+      "neither_successes": 2,
+      "success_rate_difference_first_minus_second": 0.7,
+      "paired_task_bootstrap_95_interval": [
+        0.4,
+        1.0
+      ],
+      "exact_p_two_sided": 0.015625,
+      "holm_adjusted_p_within_difficulty": 0.171875
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 7,
+      "first_only_successes": 3,
+      "second_only_successes": 2,
+      "both_successes": 5,
+      "neither_successes": 0,
+      "success_rate_difference_first_minus_second": 0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.3,
+        0.5
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "claude-opus-4-6",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 0,
+      "first_only_successes": 8,
+      "second_only_successes": 0,
+      "both_successes": 0,
+      "neither_successes": 2,
+      "success_rate_difference_first_minus_second": 0.8,
+      "paired_task_bootstrap_95_interval": [
+        0.5,
+        1.0
+      ],
+      "exact_p_two_sided": 0.0078125,
+      "holm_adjusted_p_within_difficulty": 0.1015625
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "claude-opus-4-6",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 8,
+      "second_successes": 2,
+      "first_only_successes": 6,
+      "second_only_successes": 0,
+      "both_successes": 2,
+      "neither_successes": 2,
+      "success_rate_difference_first_minus_second": 0.6,
+      "paired_task_bootstrap_95_interval": [
+        0.3,
+        0.9
+      ],
+      "exact_p_two_sided": 0.03125,
+      "holm_adjusted_p_within_difficulty": 0.28125
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gpt-5.4",
+      "second_model": "gemini-3-flash-preview",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 1,
+      "second_successes": 7,
+      "first_only_successes": 1,
+      "second_only_successes": 7,
+      "both_successes": 0,
+      "neither_successes": 2,
+      "success_rate_difference_first_minus_second": -0.6,
+      "paired_task_bootstrap_95_interval": [
+        -1.0,
+        -0.2
+      ],
+      "exact_p_two_sided": 0.0703125,
+      "holm_adjusted_p_within_difficulty": 0.5
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gpt-5.4",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 1,
+      "second_successes": 0,
+      "first_only_successes": 1,
+      "second_only_successes": 0,
+      "both_successes": 0,
+      "neither_successes": 9,
+      "success_rate_difference_first_minus_second": 0.1,
+      "paired_task_bootstrap_95_interval": [
+        0.0,
+        0.3
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gpt-5.4",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 1,
+      "second_successes": 2,
+      "first_only_successes": 1,
+      "second_only_successes": 2,
+      "both_successes": 0,
+      "neither_successes": 7,
+      "success_rate_difference_first_minus_second": -0.1,
+      "paired_task_bootstrap_95_interval": [
+        -0.4,
+        0.2
+      ],
+      "exact_p_two_sided": 1.0,
+      "holm_adjusted_p_within_difficulty": 1.0
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3-flash-preview",
+      "second_model": "claude-sonnet-4-20250514",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 0,
+      "first_only_successes": 7,
+      "second_only_successes": 0,
+      "both_successes": 0,
+      "neither_successes": 3,
+      "success_rate_difference_first_minus_second": 0.7,
+      "paired_task_bootstrap_95_interval": [
+        0.4,
+        1.0
+      ],
+      "exact_p_two_sided": 0.015625,
+      "holm_adjusted_p_within_difficulty": 0.171875
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "gemini-3-flash-preview",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 7,
+      "second_successes": 2,
+      "first_only_successes": 5,
+      "second_only_successes": 0,
+      "both_successes": 2,
+      "neither_successes": 3,
+      "success_rate_difference_first_minus_second": 0.5,
+      "paired_task_bootstrap_95_interval": [
+        0.2,
+        0.8
+      ],
+      "exact_p_two_sided": 0.0625,
+      "holm_adjusted_p_within_difficulty": 0.5
+    },
+    {
+      "difficulty": "hard",
+      "first_model": "claude-sonnet-4-20250514",
+      "second_model": "gpt-5.4-mini",
+      "n_paired_tasks": 10,
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_successes": 0,
+      "second_successes": 2,
+      "first_only_successes": 0,
+      "second_only_successes": 2,
+      "both_successes": 0,
+      "neither_successes": 8,
+      "success_rate_difference_first_minus_second": -0.2,
+      "paired_task_bootstrap_95_interval": [
+        -0.5,
+        0.0
+      ],
+      "exact_p_two_sided": 0.5,
+      "holm_adjusted_p_within_difficulty": 1.0
+    }
+  ]
+}

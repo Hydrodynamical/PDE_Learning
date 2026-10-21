@@ -143,27 +143,38 @@ paths, independently of `--output-dir`.
 For a reproducible experiment record, retain the JSON logs, exact command,
 `git rev-parse HEAD`, and `python -m pip freeze` alongside your analysis.
 
-## Results and evidence status
+## Paper, figures, and archived results
 
-This repository contains several historical experiment artifacts with different
-scopes:
+The [revised manuscript](paper.pdf) analyzes the public
+[Kaggle run archive, version 1](https://www.kaggle.com/datasets/jkmiller/elliptic-differential-equation-llm-reasoning/versions/1):
+**180 scored runs**, six models, three difficulties, and seeds 1–10 in each cell.
+All records use the standard prompt. The archive contains scored observations,
+not a complete history of failed or retried attempts.
 
-- The manuscript's preliminary comparison lists **18 attempts / 15 scored runs**
-  across three OpenAI models, three difficulties, and seeds 42 and 137.
-- Checked-in success-rate figures are labeled **180 scored runs across six
-  models**, with ten runs per model/difficulty combination. This is a different
-  design from the manuscript's proposed five-seed, two-prompt study.
-- Saved Kaggle notebook outputs contain additional exploratory runs under their
-  own settings.
+The paper's figures are regenerated from the JSON logs, including a correction
+to the older strict-threshold chart: GPT-5.4 mini has **2/10** hard successes at
+**total absolute coefficient error below 0.01**. This metric is distinct from
+function error evaluated on a spatial grid.
 
-The complete per-run JSON archive behind those tables and figures is **not
-bundled**, so their aggregates cannot currently be regenerated from a fresh
-checkout. The manuscript's six-model, five-seed, two-prompt protocol is a proposed
-expansion, not a completed result established here. Historical numerical tables
-are preserved; no new provider benchmark was run for this reproducibility update.
-The previous README's single-seed, 28-query example is omitted because its source
-logs and exact settings are unavailable and it exceeds the current default hard
-budget of 24 queries.
+[Reproduction instructions](paper_artifacts/README.md) include the pinned source
+URL, archive checksum, figure script, and derived summary. Reproducing these
+figures requires no new model calls. Historical provider responses cannot be
+recreated exactly from the archive because complete settings and source
+revisions were not recorded.
+
+The research revision adds fixed and randomized numerical controls, paired
+statistical comparisons, joint-matrix spectra, and precision/refinement audits.
+Fixed sine queries recover all 30 reconstructed tasks at the strict threshold
+using the minimum permitted solve budget. This limits claims of a benefit from
+adaptive language-model measurement selection on these instances. A separate
+300-task fresh-seed validation reports both strong fixed-policy recovery and
+failures from zero excitation and numerical sensitivity; the paper keeps those
+results distinct from the archive.
+
+The earlier three-model, two-seed pilot tables are retained separately in
+`paper_artifacts/legacy_pilot_tables.tex`. Their source logs have not been recovered, and they are not
+pooled with the six-model study. Saved Kaggle notebooks contain further
+exploratory outputs under their own settings.
 
 ## Repository guide
 
@@ -177,4 +188,5 @@ budget of 24 queries.
 | `replot.py`, `plot_*.py`, `verify_metacognition.py` | Analysis of saved run logs |
 | [kaggle-benchmark.ipynb](kaggle-benchmark.ipynb), [kaggle.ipynb](kaggle.ipynb) | Kaggle-specific exploratory notebooks; require their own Kaggle environment |
 | `test_basis.py`, `test_weak_form.py`, `test_parser.py`, `test_cli.py`, `test_sweep.py` | Offline numerical, protocol, and workflow tests |
+| [scripts/reproduce_paper_figures.py](scripts/reproduce_paper_figures.py), [paper_artifacts/](paper_artifacts/) | Reproduce the paper figures and audit the archived study |
 | [archive/](archive/) | Historical demos and earlier interfaces; outside the supported quick start |
