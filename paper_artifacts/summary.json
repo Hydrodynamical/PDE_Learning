@@ -1,0 +1,3811 @@
+{
+  "schema_version": 1,
+  "archive_sha256": "b2f50742cc76acae4a6a8d7b04d434e7735acf107d57f08f499e1dfcf05ce66f",
+  "dataset_url": "https://www.kaggle.com/datasets/jkmiller/elliptic-differential-equation-llm-reasoning/versions/1",
+  "validation": {
+    "runs": 180,
+    "scored_runs": 180,
+    "models": 6,
+    "difficulties": [
+      "easy",
+      "medium",
+      "hard"
+    ],
+    "seeds_per_cell": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "shared_ground_truth_per_seed_difficulty": true,
+    "sweep_summary_matches_all_run_scores": true,
+    "attempts_and_retries_before_archive": "not recorded"
+  },
+  "settings": {
+    "difficulty_settings": {
+      "easy": {
+        "n_basis": 2,
+        "unknowns": 8,
+        "max_queries": 12,
+        "max_turns": 36
+      },
+      "medium": {
+        "n_basis": 3,
+        "unknowns": 12,
+        "max_queries": 18,
+        "max_turns": 54
+      },
+      "hard": {
+        "n_basis": 4,
+        "unknowns": 16,
+        "max_queries": 24,
+        "max_turns": 72
+      }
+    },
+    "prompt_condition": "standard",
+    "reasoning_effort": {
+      "openai": "medium",
+      "anthropic": null,
+      "google": null
+    },
+    "run_timestamp_range": [
+      "2026-04-13T20:57:21",
+      "2026-04-16T01:38:11"
+    ],
+    "run_timestamp_timezone": "not recorded"
+  },
+  "definitions": {
+    "coefficient_error": "E_j = max_l abs(predicted_theta[j,l] - true_theta[j,l]); absolute coefficient error, not relative error",
+    "total_error": "E = E_a + E_b + E_c + E_f; strict threshold comparison",
+    "improvement_ratio": "first solve total error / last solve total error; missing values assigned 1 to retain legacy plotting convention",
+    "family_entropy": "-sum(p_i log2(p_i)) / log2(5), over the final solve taxonomy: polynomial/trigonometric/exponential/localized/other; later queries are omitted",
+    "action_stack": "separate per-action medians, summed; not the median total action count",
+    "population_sd": "ddof=0 across the ten archived runs; descriptive variation, not a confidence interval",
+    "calibration": "pool a/b/c reports; pair with latest solve on an earlier transcript turn with queries_at_solve <= report query count; omit reports without prior solve; event is E_j < 0.1",
+    "calibration_bins": "disjoint [lo,hi), with 1 in the final bin; plot mean stated confidence against empirical success fraction; marker area in points squared is 5 + 1.1 times bin count"
+  },
+  "cells": [
+    {
+      "model": "gemini-3.1-pro-preview",
+      "difficulty": "easy",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.000370777772830167,
+        "median": 7.755304711420625e-05,
+        "population_sd": 0.0005225256475759676,
+        "min": 2.85765574789277e-06,
+        "max": 0.00149449924379539
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 1.82984866430206e-05,
+          "median": 4.232255491842807e-06,
+          "population_sd": 2.9527541733253265e-05,
+          "min": 2.531220867560413e-07,
+          "max": 9.683774361946007e-05
+        },
+        "b": {
+          "n": 10,
+          "mean": 8.057609007438425e-05,
+          "median": 1.2542241629883887e-05,
+          "population_sd": 0.00012146038146458422,
+          "min": 1.084896887664063e-06,
+          "max": 0.00032275650432722625
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.0002719031955687758,
+          "median": 6.173655065314088e-05,
+          "population_sd": 0.0003799964791410331,
+          "min": 1.3416062910331927e-06,
+          "max": 0.0011232169981067741
+        },
+        "f": {
+          "n": 10,
+          "mean": 5.439863837164438e-13,
+          "median": 5.036249195455866e-13,
+          "population_sd": 2.205103952200809e-13,
+          "min": 2.537900445354069e-13,
+          "max": 1.0303979891546078e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 2.7,
+        "median": 3.0,
+        "population_sd": 0.458257569495584,
+        "min": 2.0,
+        "max": 3.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.4,
+        "median": 1.0,
+        "population_sd": 0.8,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 1.6,
+        "median": 1.0,
+        "population_sd": 1.9078784028338913,
+        "min": 0.0,
+        "max": 7.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.85,
+        "median": 0.8333333333333334,
+        "population_sd": 0.062360956446232345,
+        "min": 0.75,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 1.2830289419008767,
+        "median": 1.0,
+        "population_sd": 0.725486036106842,
+        "min": 0.8628423368742358,
+        "max": 3.315478395335362
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.43796111393890524,
+        "median": 0.4130825235885582,
+        "population_sd": 0.11290999401646279,
+        "min": 0.31091750708257115,
+        "max": 0.6554587535412855
+      },
+      "calibration_support": {
+        "reports": 30,
+        "reports_paired": 30,
+        "observations_on_shared_legacy_bin_boundaries": 37,
+        "coefficient_observations": 90
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 10,
+          "successes": 10,
+          "mean_confidence": 0.1,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.2,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.3,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 2,
+          "mean_confidence": 0.4,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 14,
+          "successes": 14,
+          "mean_confidence": 0.5,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 2,
+          "mean_confidence": 0.825,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 60,
+          "successes": 60,
+          "mean_confidence": 0.9763333333333333,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "difficulty": "easy",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.00037900240696269236,
+        "median": 0.00013570443369229022,
+        "population_sd": 0.000597609387730051,
+        "min": 1.992230834593311e-06,
+        "max": 0.0018307646277347898
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 1.342493854359604e-05,
+          "median": 5.716303183904425e-06,
+          "population_sd": 1.7213651318083095e-05,
+          "min": 1.9960595731838282e-07,
+          "max": 5.944050671206555e-05
+        },
+        "b": {
+          "n": 10,
+          "mean": 7.297809838991379e-05,
+          "median": 2.7138781449497762e-05,
+          "population_sd": 0.00011765991018228306,
+          "min": 3.914247638792112e-07,
+          "max": 0.00039533902491395434
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.0002925993695546534,
+          "median": 9.443960341684599e-05,
+          "population_sd": 0.00046696008028004367,
+          "min": 1.401199884010218e-06,
+          "max": 0.001375985096018828
+        },
+        "f": {
+          "n": 10,
+          "mean": 4.745290931408618e-13,
+          "median": 4.1491809987803663e-13,
+          "population_sd": 3.578439234162873e-13,
+          "min": 4.8808179720083444e-14,
+          "max": 1.1592948823135885e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 3.3,
+        "median": 3.0,
+        "population_sd": 0.9,
+        "min": 2.0,
+        "max": 5.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 5.6,
+        "median": 6.0,
+        "population_sd": 1.019803902718557,
+        "min": 4.0,
+        "max": 7.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 4.5,
+        "median": 3.5,
+        "population_sd": 2.29128784747792,
+        "min": 1.0,
+        "max": 9.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9833333333333334,
+        "median": 1.0,
+        "population_sd": 0.04999999999999999,
+        "min": 0.8333333333333334,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 74.36193089220578,
+        "median": 1.0205467425189434,
+        "population_sd": 219.3417807349074,
+        "min": 0.755605876198789,
+        "max": 732.3848665028937
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.6374167643336286,
+        "median": 0.6428871126115043,
+        "population_sd": 0.046014115569054374,
+        "min": 0.511954645864489,
+        "max": 0.6826061944859853
+      },
+      "calibration_support": {
+        "reports": 32,
+        "reports_paired": 32,
+        "observations_on_shared_legacy_bin_boundaries": 52,
+        "coefficient_observations": 96
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.15,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 9,
+          "mean_confidence": 0.21666666666666667,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 10,
+          "successes": 10,
+          "mean_confidence": 0.31,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 12,
+          "mean_confidence": 0.4166666666666667,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 9,
+          "mean_confidence": 0.5166666666666667,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 7,
+          "successes": 7,
+          "mean_confidence": 0.6142857142857143,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 16,
+          "mean_confidence": 0.725,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 9,
+          "mean_confidence": 0.8333333333333334,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 23,
+          "successes": 23,
+          "mean_confidence": 0.9421739130434782,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "difficulty": "easy",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7
+        },
+        "0.1": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.21083571496724235,
+        "median": 0.0017119736061363036,
+        "population_sd": 0.4254411848375741,
+        "min": 1.0342221739411545e-05,
+        "max": 1.2302900117961697
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.014132999975867104,
+          "median": 6.17956998502367e-05,
+          "population_sd": 0.02818005052749629,
+          "min": 1.1276290198224126e-06,
+          "max": 0.07776061180930993
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.05481555992517358,
+          "median": 0.00035450048480153756,
+          "population_sd": 0.1180922859439462,
+          "min": 4.1124329019509576e-06,
+          "max": 0.3754807433806483
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.14188715506412702,
+          "median": 0.001227066556201542,
+          "population_sd": 0.2835077697814345,
+          "min": 5.102158868175444e-06,
+          "max": 0.7924311242476183
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.0746411533156816e-12,
+          "median": 8.774370119368768e-13,
+          "population_sd": 3.1165492863524574e-12,
+          "min": 3.5477176751896877e-13,
+          "max": 1.1026735080577055e-11
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 3.0,
+        "median": 3.0,
+        "population_sd": 1.0,
+        "min": 1.0,
+        "max": 4.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 2.0,
+        "median": 2.0,
+        "population_sd": 0.6324555320336759,
+        "min": 1.0,
+        "max": 3.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 12.4,
+        "median": 11.5,
+        "population_sd": 2.4166091947189146,
+        "min": 9.0,
+        "max": 17.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.8666666666666667,
+        "median": 0.9166666666666666,
+        "population_sd": 0.10671873729054748,
+        "min": 0.6666666666666666,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 181.12375970131913,
+        "median": 1.6012217626708034,
+        "population_sd": 358.5017679904643,
+        "min": 0.9969318709349191,
+        "max": 1121.0471063405291
+      },
+      "improvement_ratio_imputed_runs": 1,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.39292314425924046,
+        "median": 0.38056282522295987,
+        "population_sd": 0.18733622268748046,
+        "min": 0.0,
+        "max": 0.6695233899623464
+      },
+      "calibration_support": {
+        "reports": 36,
+        "reports_paired": 34,
+        "observations_on_shared_legacy_bin_boundaries": 6,
+        "coefficient_observations": 102,
+        "reports_excluded_no_preceding_solve": 2,
+        "reports_with_different_solve_from_legacy": 1
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.09,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 5,
+          "successes": 3,
+          "mean_confidence": 0.16799999999999998,
+          "success_fraction": 0.6
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 7,
+          "successes": 3,
+          "mean_confidence": 0.2442857142857143,
+          "success_fraction": 0.42857142857142855
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 4,
+          "successes": 2,
+          "mean_confidence": 0.365,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 8,
+          "successes": 7,
+          "mean_confidence": 0.44625,
+          "success_fraction": 0.875
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 11,
+          "successes": 8,
+          "mean_confidence": 0.5590909090909091,
+          "success_fraction": 0.7272727272727273
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 8,
+          "successes": 8,
+          "mean_confidence": 0.6325000000000001,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 10,
+          "mean_confidence": 0.75,
+          "success_fraction": 0.8333333333333334
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 12,
+          "mean_confidence": 0.8461538461538461,
+          "success_fraction": 0.9230769230769231
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 33,
+          "successes": 31,
+          "mean_confidence": 0.9472727272727273,
+          "success_fraction": 0.9393939393939394
+        }
+      ]
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "difficulty": "easy",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 1.6321519158699802,
+        "median": 0.0006065730480191753,
+        "population_sd": 4.87975588284275,
+        "min": 7.4659825748668585e-06,
+        "max": 16.271363893633165
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.038217389491623704,
+          "median": 1.9639970070595147e-05,
+          "population_sd": 0.11336341815812272,
+          "min": 7.023337944556118e-07,
+          "max": 0.37829158536978336
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.2364583220728428,
+          "median": 0.00011168659096432227,
+          "population_sd": 0.7050501759644032,
+          "min": 1.4522478066492095e-06,
+          "max": 2.3515816554930886
+        },
+        "c": {
+          "n": 10,
+          "mean": 1.3574762043049902,
+          "median": 0.0004165305361882865,
+          "population_sd": 4.061347644532416,
+          "min": 4.5716157593966855e-06,
+          "max": 13.541490652769289
+        },
+        "f": {
+          "n": 10,
+          "mean": 5.233799504900105e-13,
+          "median": 4.905381656428176e-13,
+          "population_sd": 2.589954126331759e-13,
+          "min": 1.4549472737712676e-13,
+          "max": 1.0038636588660665e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.5,
+        "median": 4.5,
+        "population_sd": 2.1563858652847823,
+        "min": 1.0,
+        "max": 9.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.5,
+        "median": 1.0,
+        "population_sd": 1.5,
+        "min": 1.0,
+        "max": 6.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 3.4,
+        "median": 2.0,
+        "population_sd": 3.006659275674582,
+        "min": 2.0,
+        "max": 12.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9583333333333334,
+        "median": 1.0,
+        "population_sd": 0.10034662148993581,
+        "min": 0.6666666666666666,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 92.06429034110158,
+        "median": 1.7051591124216954,
+        "population_sd": 265.89842689025994,
+        "min": 0.2214227669210624,
+        "max": 889.6295394440224
+      },
+      "improvement_ratio_imputed_runs": 1,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.4536835178324082,
+        "median": 0.4244211090762223,
+        "population_sd": 0.08643948262547686,
+        "min": 0.34939847028229715,
+        "max": 0.6388465509538725
+      },
+      "calibration_support": {
+        "reports": 35,
+        "reports_excluded_no_preceding_solve": 8,
+        "reports_paired": 27,
+        "observations_on_shared_legacy_bin_boundaries": 33,
+        "coefficient_observations": 81,
+        "reports_with_different_solve_from_legacy": 11
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 0,
+          "mean_confidence": 0.1,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 1,
+          "mean_confidence": 0.4,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 3,
+          "mean_confidence": 0.5,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 5,
+          "mean_confidence": 0.6,
+          "success_fraction": 0.8333333333333334
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 5,
+          "successes": 2,
+          "mean_confidence": 0.73,
+          "success_fraction": 0.4
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 8,
+          "mean_confidence": 0.8222222222222222,
+          "success_fraction": 0.8888888888888888
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 52,
+          "successes": 52,
+          "mean_confidence": 0.9557692307692307,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "difficulty": "easy",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.23087877149876998,
+        "median": 0.0010787917586381063,
+        "population_sd": 0.6830164356672808,
+        "min": 9.723848116472561e-06,
+        "max": 2.2798514223314443
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.020805680832488124,
+          "median": 3.6364579619196924e-05,
+          "population_sd": 0.06172604040434782,
+          "min": 1.0320928338948543e-06,
+          "max": 0.20597802436366563
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.04542655910373455,
+          "median": 0.000207248547973736,
+          "population_sd": 0.13396154781621664,
+          "min": 3.762797110631877e-06,
+          "max": 0.44728341553939643
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.16464653156198822,
+          "median": 0.0008014670292813136,
+          "population_sd": 0.48732972023991744,
+          "min": 4.928957438310455e-06,
+          "max": 1.6265899824279297
+        },
+        "f": {
+          "n": 10,
+          "mean": 5.591034619353176e-13,
+          "median": 5.312139617075218e-13,
+          "population_sd": 2.6389458070360315e-13,
+          "min": 7.27474032867781e-14,
+          "max": 1.084909939663703e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.1,
+        "median": 4.5,
+        "population_sd": 1.044030650891055,
+        "min": 2.0,
+        "max": 5.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 0.4,
+        "median": 0.0,
+        "population_sd": 0.6633249580710799,
+        "min": 0.0,
+        "max": 2.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 0.0,
+        "median": 0.0,
+        "population_sd": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.975,
+        "median": 1.0,
+        "population_sd": 0.053359368645273735,
+        "min": 0.8333333333333334,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 2249.8329727232986,
+        "median": 79.69321447162234,
+        "population_sd": 4756.382535828535,
+        "min": 1.0310031396674395,
+        "max": 16014.68830220431
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.46071997279827526,
+        "median": 0.47003007798217583,
+        "population_sd": 0.09654171076024072,
+        "min": 0.279949419226045,
+        "max": 0.5861353116146786
+      },
+      "calibration_support": {
+        "reports": 40,
+        "reports_paired": 40,
+        "observations_on_shared_legacy_bin_boundaries": 66,
+        "coefficient_observations": 120
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 1,
+          "mean_confidence": 0.225,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 4,
+          "successes": 2,
+          "mean_confidence": 0.3125,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 11,
+          "successes": 2,
+          "mean_confidence": 0.4090909090909091,
+          "success_fraction": 0.18181818181818182
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 5,
+          "mean_confidence": 0.5111111111111111,
+          "success_fraction": 0.5555555555555556
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 20,
+          "successes": 16,
+          "mean_confidence": 0.6225,
+          "success_fraction": 0.8
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 31,
+          "successes": 25,
+          "mean_confidence": 0.7258064516129032,
+          "success_fraction": 0.8064516129032258
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 27,
+          "successes": 26,
+          "mean_confidence": 0.8314814814814815,
+          "success_fraction": 0.9629629629629629
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 16,
+          "successes": 16,
+          "mean_confidence": 0.920625,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "difficulty": "easy",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7
+        },
+        "0.1": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.6129146645464494,
+        "median": 0.0011349599705446339,
+        "population_sd": 1.0295256558202819,
+        "min": 2.8282843256288714e-05,
+        "max": 3.058681409073456
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.04213116353030301,
+          "median": 3.784473962038619e-05,
+          "population_sd": 0.08556269708618615,
+          "min": 2.572910969833586e-06,
+          "max": 0.2850485907571991
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.1722637127914991,
+          "median": 0.00020122056561252202,
+          "population_sd": 0.355253444241844,
+          "min": 5.543551916398215e-06,
+          "max": 1.179003508916603
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.3985197882227125,
+          "median": 0.0008954468544371263,
+          "population_sd": 0.7963552377824958,
+          "min": 2.0166379392394518e-05,
+          "max": 2.630876843338924
+        },
+        "f": {
+          "n": 10,
+          "mean": 1.9347203306673175e-12,
+          "median": 1.2837262085126543e-12,
+          "population_sd": 1.6371202573363658e-12,
+          "min": 4.3431924723336124e-13,
+          "max": 5.121014723385997e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 2.1,
+        "median": 2.0,
+        "population_sd": 1.044030650891055,
+        "min": 1.0,
+        "max": 4.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.6,
+        "median": 1.5,
+        "population_sd": 0.916515138991168,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 5.4,
+        "median": 5.5,
+        "population_sd": 2.3323807579381204,
+        "min": 1.0,
+        "max": 8.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.7666666666666666,
+        "median": 0.75,
+        "population_sd": 0.10408329997330665,
+        "min": 0.6666666666666666,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 1180.7963181848838,
+        "median": 1.0889631249874756,
+        "population_sd": 2789.5907272160634,
+        "min": 0.996927390947515,
+        "max": 9229.953374238856
+      },
+      "improvement_ratio_imputed_runs": 3,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.3576062439461303,
+        "median": 0.40327042019582904,
+        "population_sd": 0.21139033189727416,
+        "min": 0.0,
+        "max": 0.6182450298282404
+      },
+      "calibration_support": {
+        "reports": 27,
+        "reports_paired": 26,
+        "observations_on_shared_legacy_bin_boundaries": 12,
+        "coefficient_observations": 78,
+        "reports_excluded_no_preceding_solve": 1
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 0,
+          "mean_confidence": 0.28,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 0,
+          "mean_confidence": 0.35,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 1,
+          "mean_confidence": 0.44333333333333336,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 10,
+          "successes": 5,
+          "mean_confidence": 0.554,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 14,
+          "successes": 11,
+          "mean_confidence": 0.6407142857142857,
+          "success_fraction": 0.7857142857142857
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 5,
+          "mean_confidence": 0.75,
+          "success_fraction": 0.38461538461538464
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 20,
+          "successes": 16,
+          "mean_confidence": 0.846,
+          "success_fraction": 0.8
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 16,
+          "successes": 14,
+          "mean_confidence": 0.93375,
+          "success_fraction": 0.875
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.1-pro-preview",
+      "difficulty": "medium",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.006362965231370809,
+        "median": 0.000877436280015853,
+        "population_sd": 0.01673455419967588,
+        "min": 0.00020080238805211814,
+        "max": 0.0565538494045537
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.0005348262294194941,
+          "median": 4.458614090263602e-05,
+          "population_sd": 0.0014750131987373541,
+          "min": 1.3679886411210873e-05,
+          "max": 0.0049593332360422515
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.0015093102105688011,
+          "median": 0.00016558434825908463,
+          "population_sd": 0.00409429870127969,
+          "min": 3.806641021486534e-05,
+          "max": 0.013790562489076619
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.0043188287897034374,
+          "median": 0.000685747463363414,
+          "population_sd": 0.011166318621669995,
+          "min": 0.00014617265112026878,
+          "max": 0.03780395367784606
+        },
+        "f": {
+          "n": 10,
+          "mean": 1.6790763224250326e-12,
+          "median": 1.505927327283274e-12,
+          "population_sd": 8.901694603478263e-13,
+          "min": 5.260236690673992e-13,
+          "max": 3.5840219680949303e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 3.1,
+        "median": 3.0,
+        "population_sd": 0.8306623862918074,
+        "min": 2.0,
+        "max": 5.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 2.3,
+        "median": 2.5,
+        "population_sd": 1.3453624047073711,
+        "min": 0.0,
+        "max": 5.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 2.6,
+        "median": 0.0,
+        "population_sd": 5.0039984012787215,
+        "min": 0.0,
+        "max": 14.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.8166666666666667,
+        "median": 0.7777777777777778,
+        "population_sd": 0.08258927081843613,
+        "min": 0.7222222222222222,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 12.578495192401007,
+        "median": 2.4471746346563767,
+        "population_sd": 27.192056674666016,
+        "min": 0.9824671525973983,
+        "max": 93.38093107891822
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.3625718501837038,
+        "median": 0.383607142388175,
+        "population_sd": 0.13364119078326436,
+        "min": 0.1684994313522164,
+        "max": 0.6482719332517348
+      },
+      "calibration_support": {
+        "reports": 36,
+        "reports_paired": 36,
+        "observations_on_shared_legacy_bin_boundaries": 57,
+        "coefficient_observations": 108,
+        "reports_with_different_solve_from_legacy": 2
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 24,
+          "successes": 22,
+          "mean_confidence": 0.1,
+          "success_fraction": 0.9166666666666666
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.3,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 7,
+          "successes": 7,
+          "mean_confidence": 0.5,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 1,
+          "mean_confidence": 0.6166666666666667,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 4,
+          "successes": 2,
+          "mean_confidence": 0.7124999999999999,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 6,
+          "mean_confidence": 0.8083333333333333,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 63,
+          "successes": 63,
+          "mean_confidence": 0.9661904761904762,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "difficulty": "medium",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.517025693451972,
+        "median": 0.0024963908917015887,
+        "population_sd": 1.5441367308548157,
+        "min": 0.0012195005762512656,
+        "max": 5.149435451355526
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.049645652054952326,
+          "median": 0.00014993478805575,
+          "population_sd": 0.14851523278918316,
+          "min": 1.498724185673539e-05,
+          "max": 0.4951913213717637
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.20585653146585997,
+          "median": 0.0003912754567846899,
+          "population_sd": 0.6163553230294055,
+          "min": 0.00019500792423809976,
+          "max": 2.054922467478008
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.26152350992974804,
+          "median": 0.001913399384536274,
+          "population_sd": 0.779266241613254,
+          "min": 0.0008358618858244071,
+          "max": 2.599321662505286
+        },
+        "f": {
+          "n": 10,
+          "mean": 1.4116735558289406e-12,
+          "median": 1.2053552600477246e-12,
+          "population_sd": 6.861883466174975e-13,
+          "min": 4.676814491233472e-13,
+          "max": 2.928324249751313e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.0,
+        "median": 4.0,
+        "population_sd": 1.2649110640673518,
+        "min": 2.0,
+        "max": 7.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 7.6,
+        "median": 8.0,
+        "population_sd": 2.90516780926679,
+        "min": 3.0,
+        "max": 12.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 3.6,
+        "median": 3.0,
+        "population_sd": 2.90516780926679,
+        "min": 0.0,
+        "max": 11.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9833333333333333,
+        "median": 1.0,
+        "population_sd": 0.035572912430182506,
+        "min": 0.8888888888888888,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 30.131969119221893,
+        "median": 1.922519339274821,
+        "population_sd": 71.17776269025748,
+        "min": 0.0003642655018389606,
+        "max": 242.0100894569511
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.640774232936896,
+        "median": 0.6714620694072282,
+        "population_sd": 0.06985011983979901,
+        "min": 0.43674808785287145,
+        "max": 0.6768261580891723
+      },
+      "calibration_support": {
+        "reports": 40,
+        "reports_paired": 40,
+        "observations_on_shared_legacy_bin_boundaries": 69,
+        "coefficient_observations": 120
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 8,
+          "successes": 5,
+          "mean_confidence": 0.1375,
+          "success_fraction": 0.625
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 27,
+          "successes": 23,
+          "mean_confidence": 0.21666666666666667,
+          "success_fraction": 0.8518518518518519
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 8,
+          "mean_confidence": 0.31666666666666665,
+          "success_fraction": 0.8888888888888888
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 11,
+          "mean_confidence": 0.41250000000000003,
+          "success_fraction": 0.9166666666666666
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 16,
+          "mean_confidence": 0.515625,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 8,
+          "mean_confidence": 0.611111111111111,
+          "success_fraction": 0.8888888888888888
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 11,
+          "successes": 11,
+          "mean_confidence": 0.7227272727272727,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 9,
+          "mean_confidence": 0.8266666666666667,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 19,
+          "successes": 19,
+          "mean_confidence": 0.9426315789473684,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "difficulty": "medium",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 3,
+          "n": 10,
+          "rate": 0.3
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.03157070255663214,
+        "median": 0.018506892996408737,
+        "population_sd": 0.03411585549022317,
+        "min": 0.002893544856774871,
+        "max": 0.12172489854400224
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.002140321768599253,
+          "median": 0.0011651002593208726,
+          "population_sd": 0.002705050416040652,
+          "min": 0.00016098420206924,
+          "max": 0.009553440198473373
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.006115602308832163,
+          "median": 0.002995624507610928,
+          "population_sd": 0.006247370994149867,
+          "min": 0.0005389175985482941,
+          "max": 0.02130253200275556
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.023314778477067807,
+          "median": 0.013582796082051707,
+          "population_sd": 0.02556614654378988,
+          "min": 0.0021707040660333687,
+          "max": 0.09086892634196109
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.1329174537676464e-12,
+          "median": 2.09023076624959e-12,
+          "population_sd": 1.4410647515565179e-12,
+          "min": 1.3086753902769033e-13,
+          "max": 4.228839500797221e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.6,
+        "median": 4.5,
+        "population_sd": 1.2,
+        "min": 3.0,
+        "max": 7.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 2.7,
+        "median": 3.0,
+        "population_sd": 0.6403124237432849,
+        "min": 2.0,
+        "max": 4.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 18.5,
+        "median": 18.5,
+        "population_sd": 3.0083217912982647,
+        "min": 15.0,
+        "max": 25.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.8833333333333333,
+        "median": 0.8611111111111112,
+        "population_sd": 0.0840708108356753,
+        "min": 0.7777777777777778,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 165.07130644014583,
+        "median": 3.9529291455582345,
+        "population_sd": 359.81848442812765,
+        "min": 0.1428773927282735,
+        "max": 1213.4415599207987
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.594361024574689,
+        "median": 0.5945243853200409,
+        "population_sd": 0.043194472874733957,
+        "min": 0.5348770424634072,
+        "max": 0.680410131798321
+      },
+      "calibration_support": {
+        "reports": 60,
+        "reports_paired": 54,
+        "observations_on_shared_legacy_bin_boundaries": 12,
+        "coefficient_observations": 162,
+        "reports_excluded_no_preceding_solve": 6,
+        "reports_with_different_solve_from_legacy": 12
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 0,
+          "mean_confidence": 0.07500000000000001,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 1,
+          "mean_confidence": 0.17333333333333334,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 2,
+          "mean_confidence": 0.23666666666666666,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 8,
+          "mean_confidence": 0.3575,
+          "success_fraction": 0.6666666666666666
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 22,
+          "successes": 16,
+          "mean_confidence": 0.4409090909090909,
+          "success_fraction": 0.7272727272727273
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 23,
+          "successes": 18,
+          "mean_confidence": 0.561304347826087,
+          "success_fraction": 0.782608695652174
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 26,
+          "successes": 21,
+          "mean_confidence": 0.6453846153846154,
+          "success_fraction": 0.8076923076923077
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 23,
+          "successes": 19,
+          "mean_confidence": 0.7417391304347826,
+          "success_fraction": 0.8260869565217391
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 24,
+          "successes": 20,
+          "mean_confidence": 0.84,
+          "success_fraction": 0.8333333333333334
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 21,
+          "successes": 20,
+          "mean_confidence": 0.9333333333333333,
+          "success_fraction": 0.9523809523809523
+        }
+      ]
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "difficulty": "medium",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.1539439102874008,
+        "median": 0.008846706574683654,
+        "population_sd": 0.4175118726227043,
+        "min": 0.0007392815361706717,
+        "max": 1.4051440292972688
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.008707978451416892,
+          "median": 0.0005641020589143286,
+          "population_sd": 0.022861672665404467,
+          "min": 4.975755452996111e-05,
+          "max": 0.07708985683761926
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.03279456282489021,
+          "median": 0.0016069231067453726,
+          "population_sd": 0.08896781760321651,
+          "min": 0.00015009101078930498,
+          "max": 0.2993044007172259
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.11244136900927446,
+          "median": 0.007122291381797721,
+          "population_sd": 0.30570218906092855,
+          "min": 0.0005394329693207411,
+          "max": 1.0287497717374654
+        },
+        "f": {
+          "n": 10,
+          "mean": 1.819235040390055e-12,
+          "median": 1.5519113771844673e-12,
+          "population_sd": 1.1882257333789703e-12,
+          "min": 6.743494651573201e-13,
+          "max": 4.958256027975949e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 5.7,
+        "median": 6.0,
+        "population_sd": 1.4866068747318506,
+        "min": 4.0,
+        "max": 9.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.8,
+        "median": 1.5,
+        "population_sd": 1.1661903789690602,
+        "min": 1.0,
+        "max": 5.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 4.3,
+        "median": 2.5,
+        "population_sd": 4.879549159502341,
+        "min": 0.0,
+        "max": 18.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9944444444444445,
+        "median": 1.0,
+        "population_sd": 0.016666666666666673,
+        "min": 0.9444444444444444,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 93.19551005547893,
+        "median": 25.71099165826834,
+        "population_sd": 165.30135079205039,
+        "min": 0.47809141771764435,
+        "max": 560.9657752256708
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.49879632418240416,
+        "median": 0.5015537978952447,
+        "population_sd": 0.0963692890207339,
+        "min": 0.3291249665273085,
+        "max": 0.644093171193426
+      },
+      "calibration_support": {
+        "reports": 60,
+        "reports_paired": 56,
+        "observations_on_shared_legacy_bin_boundaries": 86,
+        "reports_with_different_solve_from_legacy": 30,
+        "coefficient_observations": 168,
+        "reports_excluded_no_preceding_solve": 4
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 1,
+          "mean_confidence": 0.1,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 4,
+          "successes": 1,
+          "mean_confidence": 0.2,
+          "success_fraction": 0.25
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 2,
+          "mean_confidence": 0.3,
+          "success_fraction": 0.6666666666666666
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 6,
+          "mean_confidence": 0.4,
+          "success_fraction": 0.46153846153846156
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 2,
+          "mean_confidence": 0.5,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 7,
+          "mean_confidence": 0.603125,
+          "success_fraction": 0.4375
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 17,
+          "successes": 9,
+          "mean_confidence": 0.7117647058823529,
+          "success_fraction": 0.5294117647058824
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 29,
+          "successes": 18,
+          "mean_confidence": 0.8258620689655173,
+          "success_fraction": 0.6206896551724138
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 78,
+          "successes": 67,
+          "mean_confidence": 0.9603846153846154,
+          "success_fraction": 0.8589743589743589
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "difficulty": "medium",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 6,
+          "n": 10,
+          "rate": 0.6
+        },
+        "0.1": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.2551218929443303,
+        "median": 0.005092019748996026,
+        "population_sd": 0.638740562183435,
+        "min": 0.0012555270088210058,
+        "max": 2.157039596571935
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.018802784581752843,
+          "median": 0.0003726124991295654,
+          "population_sd": 0.05262949083377009,
+          "min": 5.759620032560756e-05,
+          "max": 0.17660788953393702
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.07843175468632907,
+          "median": 0.001267539376492155,
+          "population_sd": 0.21092231203152595,
+          "min": 0.0002523671426957197,
+          "max": 0.709441439774073
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.15788735367398612,
+          "median": 0.003707206896990556,
+          "population_sd": 0.37597239581952857,
+          "min": 0.0009019973323659558,
+          "max": 1.2709902672632238
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.262247333906231e-12,
+          "median": 1.6621218290602258e-12,
+          "population_sd": 1.6803034666829994e-12,
+          "min": 6.725175971666886e-13,
+          "max": 6.369571536879448e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.8,
+        "median": 4.5,
+        "population_sd": 1.3266499161421599,
+        "min": 3.0,
+        "max": 7.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.5,
+        "median": 1.5,
+        "population_sd": 1.02469507659596,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 0.6,
+        "median": 0.0,
+        "population_sd": 1.2,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9222222222222222,
+        "median": 0.9166666666666666,
+        "population_sd": 0.061864048475889125,
+        "min": 0.8333333333333334,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 536.0500019818942,
+        "median": 193.3008294033089,
+        "population_sd": 726.302820366003,
+        "min": 3.1074978521465524,
+        "max": 2054.722311450868
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.5325072413805066,
+        "median": 0.5605578493506941,
+        "population_sd": 0.11294906907492525,
+        "min": 0.34939847028229715,
+        "max": 0.680410131798321
+      },
+      "calibration_support": {
+        "reports": 54,
+        "reports_paired": 54,
+        "observations_on_shared_legacy_bin_boundaries": 83,
+        "coefficient_observations": 162
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 3,
+          "mean_confidence": 0.13333333333333333,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 3,
+          "mean_confidence": 0.225,
+          "success_fraction": 0.5
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 6,
+          "mean_confidence": 0.3222222222222222,
+          "success_fraction": 0.6666666666666666
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 7,
+          "mean_confidence": 0.41875,
+          "success_fraction": 0.4375
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 18,
+          "successes": 7,
+          "mean_confidence": 0.5222222222222223,
+          "success_fraction": 0.3888888888888889
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 25,
+          "successes": 15,
+          "mean_confidence": 0.614,
+          "success_fraction": 0.6
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 35,
+          "successes": 25,
+          "mean_confidence": 0.7314285714285714,
+          "success_fraction": 0.7142857142857143
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 33,
+          "successes": 28,
+          "mean_confidence": 0.8318181818181818,
+          "success_fraction": 0.8484848484848485
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 17,
+          "successes": 17,
+          "mean_confidence": 0.9194117647058824,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "difficulty": "medium",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 4,
+          "n": 10,
+          "rate": 0.4
+        },
+        "0.1": {
+          "count": 5,
+          "n": 10,
+          "rate": 0.5
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 1.2599989384066765,
+        "median": 0.2369306792659422,
+        "population_sd": 1.6748413222020617,
+        "min": 0.0026233399089364284,
+        "max": 5.118170691093734
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.08477708609323746,
+          "median": 0.01798412664289306,
+          "population_sd": 0.11615629780701055,
+          "min": 8.389524435588478e-05,
+          "max": 0.333574491895885
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.24175608631632245,
+          "median": 0.041200041371962676,
+          "population_sd": 0.3081302375079588,
+          "min": 0.00047728323415807683,
+          "max": 0.7675324994102906
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.9334657659761636,
+          "median": 0.1777465112462226,
+          "population_sd": 1.2704296948098972,
+          "min": 0.0012638789055039457,
+          "max": 4.017063699784467
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.0953141999235925e-11,
+          "median": 7.355199782566046e-12,
+          "population_sd": 2.5450046758189162e-11,
+          "min": 7.700506898800086e-13,
+          "max": 8.127543082991906e-11
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 1.6,
+        "median": 1.0,
+        "population_sd": 1.019803902718557,
+        "min": 1.0,
+        "max": 4.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.2,
+        "median": 1.0,
+        "population_sd": 0.9797958971132712,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 2.7,
+        "median": 3.0,
+        "population_sd": 2.4919871588754225,
+        "min": 0.0,
+        "max": 7.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.7166666666666667,
+        "median": 0.6666666666666666,
+        "population_sd": 0.07637626158259735,
+        "min": 0.6666666666666666,
+        "max": 0.8888888888888888
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 3.256145708525944,
+        "median": 1.0,
+        "population_sd": 6.97274198828903,
+        "min": 0.4184446876459331,
+        "max": 24.16796093579675
+      },
+      "improvement_ratio_imputed_runs": 7,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.2942260127116174,
+        "median": 0.3301579886824342,
+        "population_sd": 0.21895655117727253,
+        "min": 0.0,
+        "max": 0.6362027337173605
+      },
+      "calibration_support": {
+        "reports": 24,
+        "reports_paired": 23,
+        "coefficient_observations": 69,
+        "observations_on_shared_legacy_bin_boundaries": 10,
+        "reports_excluded_no_preceding_solve": 1
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 0,
+          "mean_confidence": 0.24,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.3,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 4,
+          "mean_confidence": 0.46166666666666667,
+          "success_fraction": 0.6666666666666666
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 5,
+          "mean_confidence": 0.5408333333333334,
+          "success_fraction": 0.4166666666666667
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 5,
+          "successes": 2,
+          "mean_confidence": 0.63,
+          "success_fraction": 0.4
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 5,
+          "mean_confidence": 0.7424999999999999,
+          "success_fraction": 0.4166666666666667
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 19,
+          "successes": 11,
+          "mean_confidence": 0.8373684210526315,
+          "success_fraction": 0.5789473684210527
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 13,
+          "successes": 11,
+          "mean_confidence": 0.9484615384615385,
+          "success_fraction": 0.8461538461538461
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.1-pro-preview",
+      "difficulty": "hard",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        },
+        "0.1": {
+          "count": 10,
+          "n": 10,
+          "rate": 1.0
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.0005316311459245785,
+        "median": 0.00012928508004255573,
+        "population_sd": 0.000775390915405809,
+        "min": 1.9023487019043106e-05,
+        "max": 0.0022742233987639304
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 9.458807137764268e-06,
+          "median": 5.697741571880823e-06,
+          "population_sd": 1.0734776889244912e-05,
+          "min": 4.4119656351926384e-07,
+          "max": 3.331333063155695e-05
+        },
+        "b": {
+          "n": 10,
+          "mean": 9.539770985184242e-05,
+          "median": 1.8150530183835833e-05,
+          "population_sd": 0.000138342188403366,
+          "min": 7.2472011505980705e-06,
+          "max": 0.00040553518736374805
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.00042677462690651795,
+          "median": 0.00010347935754061378,
+          "population_sd": 0.0006279377116505568,
+          "min": 1.1099531476238544e-05,
+          "max": 0.0018434298411587058
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.028453793823104e-12,
+          "median": 1.6173173911226968e-12,
+          "population_sd": 9.10854616154148e-13,
+          "min": 1.2345541255953663e-12,
+          "max": 4.1313619192351325e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 3.0,
+        "median": 2.5,
+        "population_sd": 1.3416407864998738,
+        "min": 2.0,
+        "max": 6.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 2.7,
+        "median": 2.0,
+        "population_sd": 1.4177446878757824,
+        "min": 1.0,
+        "max": 5.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 0.9,
+        "median": 0.0,
+        "population_sd": 1.9209372712298547,
+        "min": 0.0,
+        "max": 6.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.8125,
+        "median": 0.7708333333333333,
+        "population_sd": 0.10248644896874036,
+        "min": 0.7083333333333334,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 832.8434575650846,
+        "median": 1.0,
+        "population_sd": 1929.6164033871378,
+        "min": 0.9999945000138174,
+        "max": 6555.190099804104
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.2783773467595892,
+        "median": 0.24387222867179675,
+        "population_sd": 0.11911657849615771,
+        "min": 0.13900385615216707,
+        "max": 0.42851664113838
+      },
+      "calibration_support": {
+        "reports": 38,
+        "reports_paired": 38,
+        "observations_on_shared_legacy_bin_boundaries": 53,
+        "coefficient_observations": 114
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 2,
+          "mean_confidence": 0.030000000000000002,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 29,
+          "successes": 24,
+          "mean_confidence": 0.1,
+          "success_fraction": 0.8275862068965517
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 1,
+          "successes": 1,
+          "mean_confidence": 0.2,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 2,
+          "mean_confidence": 0.3,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 2,
+          "mean_confidence": 0.4,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 4,
+          "successes": 4,
+          "mean_confidence": 0.5,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 3,
+          "mean_confidence": 0.6,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 6,
+          "successes": 6,
+          "mean_confidence": 0.8083333333333333,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 65,
+          "successes": 65,
+          "mean_confidence": 0.9835384615384616,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "difficulty": "hard",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8
+        },
+        "0.1": {
+          "count": 9,
+          "n": 10,
+          "rate": 0.9
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.7007721764045906,
+        "median": 0.0014345935603312981,
+        "population_sd": 2.087651979118169,
+        "min": 8.596082221228041e-05,
+        "max": 6.963658995119347
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.04590172407668743,
+          "median": 2.849014387476534e-05,
+          "population_sd": 0.1375641281279991,
+          "min": 2.0969968579781506e-06,
+          "max": 0.4585940611337884
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.2925198557369015,
+          "median": 0.00027573265715585826,
+          "population_sd": 0.8758058391879389,
+          "min": 8.891139869349196e-06,
+          "max": 2.919935759243057
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.36235059658869706,
+          "median": 0.0011251888543125643,
+          "population_sd": 1.0742954177383497,
+          "min": 7.49726835800324e-05,
+          "max": 3.5851291747413265
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.3046019447219944e-12,
+          "median": 1.783129199850464e-12,
+          "population_sd": 1.4601597897771575e-12,
+          "min": 8.501909387332744e-13,
+          "max": 4.880984505462038e-12
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.1,
+        "median": 4.0,
+        "population_sd": 1.972308292331602,
+        "min": 2.0,
+        "max": 9.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 7.4,
+        "median": 7.0,
+        "population_sd": 3.0397368307141326,
+        "min": 4.0,
+        "max": 15.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 3.2,
+        "median": 3.0,
+        "population_sd": 1.8867962264113207,
+        "min": 1.0,
+        "max": 7.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.975,
+        "median": 1.0,
+        "population_sd": 0.053359368645273735,
+        "min": 0.8333333333333334,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 450.49550793234346,
+        "median": 55.06532216783219,
+        "population_sd": 976.1521509064003,
+        "min": 0.0010245453783751571,
+        "max": 3332.533697331872
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.6264505094736396,
+        "median": 0.6554947936707924,
+        "population_sd": 0.08393567510201959,
+        "min": 0.38079720113903054,
+        "max": 0.6826061944859853
+      },
+      "calibration_support": {
+        "reports": 47,
+        "reports_paired": 47,
+        "observations_on_shared_legacy_bin_boundaries": 62,
+        "coefficient_observations": 141
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 19,
+          "successes": 11,
+          "mean_confidence": 0.1368421052631579,
+          "success_fraction": 0.5789473684210527
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 29,
+          "successes": 25,
+          "mean_confidence": 0.22241379310344828,
+          "success_fraction": 0.8620689655172413
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 17,
+          "successes": 17,
+          "mean_confidence": 0.32941176470588235,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 12,
+          "mean_confidence": 0.4291666666666667,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 13,
+          "mean_confidence": 0.5423076923076924,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 11,
+          "successes": 11,
+          "mean_confidence": 0.6272727272727273,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 14,
+          "successes": 14,
+          "mean_confidence": 0.7321428571428571,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 13,
+          "mean_confidence": 0.823076923076923,
+          "success_fraction": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 13,
+          "successes": 13,
+          "mean_confidence": 0.9115384615384615,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "difficulty": "hard",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 1,
+          "n": 10,
+          "rate": 0.1
+        },
+        "0.1": {
+          "count": 1,
+          "n": 10,
+          "rate": 0.1
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 1.6701549147775676,
+        "median": 0.8126193900516352,
+        "population_sd": 1.689434194343402,
+        "min": 0.009645789015785734,
+        "max": 4.67451154132358
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.03765823579612295,
+          "median": 0.02095414288328004,
+          "population_sd": 0.04000161076552437,
+          "min": 0.0004157979103274201,
+          "max": 0.11619717416880371
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.2940529453622731,
+          "median": 0.12398195434219561,
+          "population_sd": 0.3104754953874369,
+          "min": 0.0014345486233067195,
+          "max": 0.8678566337217066
+        },
+        "c": {
+          "n": 10,
+          "mean": 1.3384437336053716,
+          "median": 0.6676832928068117,
+          "population_sd": 1.4316594979947603,
+          "min": 0.00779544247809384,
+          "max": 4.214721425970819
+        },
+        "f": {
+          "n": 10,
+          "mean": 1.3799979449711328e-11,
+          "median": 3.805011861146568e-12,
+          "population_sd": 2.111439093478832e-11,
+          "min": 1.525446435834965e-12,
+          "max": 7.38874540605404e-11
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 6.5,
+        "median": 6.0,
+        "population_sd": 2.247220505424423,
+        "min": 3.0,
+        "max": 9.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 2.6,
+        "median": 2.5,
+        "population_sd": 1.1135528725660044,
+        "min": 1.0,
+        "max": 4.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 20.6,
+        "median": 18.5,
+        "population_sd": 5.499090833947008,
+        "min": 14.0,
+        "max": 34.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9375,
+        "median": 0.9791666666666667,
+        "population_sd": 0.07276770498572074,
+        "min": 0.8333333333333334,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 34.474272909726714,
+        "median": 1.3415495554180987,
+        "population_sd": 95.28435240920373,
+        "min": 0.6408726480518186,
+        "max": 320.1799854544329
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.5779315495815193,
+        "median": 0.6078508040718813,
+        "population_sd": 0.10331898636239102,
+        "min": 0.3886396330626915,
+        "max": 0.6737525831165904
+      },
+      "calibration_support": {
+        "reports": 58,
+        "reports_paired": 56,
+        "observations_on_shared_legacy_bin_boundaries": 16,
+        "coefficient_observations": 168,
+        "reports_excluded_no_preceding_solve": 2,
+        "reports_with_different_solve_from_legacy": 8
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 17,
+          "successes": 1,
+          "mean_confidence": 0.06058823529411765,
+          "success_fraction": 0.058823529411764705
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 5,
+          "mean_confidence": 0.146875,
+          "success_fraction": 0.3125
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 6,
+          "mean_confidence": 0.24375000000000002,
+          "success_fraction": 0.375
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 1,
+          "mean_confidence": 0.3384615384615385,
+          "success_fraction": 0.07692307692307693
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 14,
+          "successes": 3,
+          "mean_confidence": 0.43285714285714283,
+          "success_fraction": 0.21428571428571427
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 23,
+          "successes": 11,
+          "mean_confidence": 0.5534782608695652,
+          "success_fraction": 0.4782608695652174
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 6,
+          "mean_confidence": 0.650625,
+          "success_fraction": 0.375
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 17,
+          "successes": 7,
+          "mean_confidence": 0.7364705882352941,
+          "success_fraction": 0.4117647058823529
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 22,
+          "successes": 13,
+          "mean_confidence": 0.8368181818181818,
+          "success_fraction": 0.5909090909090909
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 14,
+          "successes": 10,
+          "mean_confidence": 0.9214285714285715,
+          "success_fraction": 0.7142857142857143
+        }
+      ]
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "difficulty": "hard",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 7,
+          "n": 10,
+          "rate": 0.7
+        },
+        "0.1": {
+          "count": 8,
+          "n": 10,
+          "rate": 0.8
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 0.3780083377967069,
+        "median": 0.0006707591805276691,
+        "population_sd": 0.7675043583572259,
+        "min": 5.0444874240856974e-05,
+        "max": 2.225782333482537
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.018992909202275754,
+          "median": 1.2513658036256148e-05,
+          "population_sd": 0.050438525232673496,
+          "min": 4.956743844264366e-07,
+          "max": 0.1691860303202174
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.08397034662417627,
+          "median": 0.00011090098463373277,
+          "population_sd": 0.17327378215532296,
+          "min": 4.508976110040308e-06,
+          "max": 0.5195381373327838
+        },
+        "c": {
+          "n": 10,
+          "mean": 0.2750450819470152,
+          "median": 0.0005355128557755773,
+          "population_sd": 0.5518826348497138,
+          "min": 4.475868615264056e-05,
+          "max": 1.5370581656572744
+        },
+        "f": {
+          "n": 10,
+          "mean": 2.32396414612257e-11,
+          "median": 1.7782442185421132e-12,
+          "population_sd": 5.116970210345628e-11,
+          "min": 1.141531313919586e-12,
+          "max": 1.7226142734472205e-10
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 4.9,
+        "median": 4.0,
+        "population_sd": 2.808914381037628,
+        "min": 1.0,
+        "max": 9.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 1.9,
+        "median": 2.0,
+        "population_sd": 0.5385164807134504,
+        "min": 1.0,
+        "max": 3.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 1.6,
+        "median": 1.5,
+        "population_sd": 1.1135528725660044,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.925,
+        "median": 0.9791666666666667,
+        "population_sd": 0.10833333333333335,
+        "min": 0.6666666666666666,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 154.310124623931,
+        "median": 8.372147598863169,
+        "population_sd": 198.47480673042153,
+        "min": 1.0,
+        "max": 581.4210583827005
+      },
+      "improvement_ratio_imputed_runs": 1,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.43273299691704736,
+        "median": 0.4260478016451459,
+        "population_sd": 0.05604094197898679,
+        "min": 0.2998422998791956,
+        "max": 0.5027876297535965
+      },
+      "calibration_support": {
+        "reports": 39,
+        "reports_paired": 37,
+        "observations_on_shared_legacy_bin_boundaries": 59,
+        "reports_with_different_solve_from_legacy": 7,
+        "coefficient_observations": 111,
+        "reports_excluded_no_preceding_solve": 2
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 0,
+          "mean_confidence": 0.2,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 5,
+          "successes": 4,
+          "mean_confidence": 0.3,
+          "success_fraction": 0.8
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 5,
+          "mean_confidence": 0.4,
+          "success_fraction": 0.5555555555555556
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 2,
+          "mean_confidence": 0.5,
+          "success_fraction": 0.6666666666666666
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 7,
+          "mean_confidence": 0.6041666666666666,
+          "success_fraction": 0.5833333333333334
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 8,
+          "mean_confidence": 0.7192307692307692,
+          "success_fraction": 0.6153846153846154
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 16,
+          "successes": 13,
+          "mean_confidence": 0.81875,
+          "success_fraction": 0.8125
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 51,
+          "successes": 47,
+          "mean_confidence": 0.9541176470588235,
+          "success_fraction": 0.9215686274509803
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "difficulty": "hard",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 0,
+          "n": 10,
+          "rate": 0.0
+        },
+        "0.1": {
+          "count": 1,
+          "n": 10,
+          "rate": 0.1
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 1.5029133152367213,
+        "median": 0.6456018015624232,
+        "population_sd": 1.5402469170919235,
+        "min": 0.04594581321381147,
+        "max": 4.970108415638574
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.030882829725213987,
+          "median": 0.01790448441696826,
+          "population_sd": 0.038423387024777114,
+          "min": 0.000810407913829525,
+          "max": 0.1304079855968816
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.37701830623864974,
+          "median": 0.1318190176575071,
+          "population_sd": 0.6183924711725551,
+          "min": 0.008292113668068701,
+          "max": 2.1165009110987603
+        },
+        "c": {
+          "n": 10,
+          "mean": 1.0950121792314143,
+          "median": 0.5000554904529961,
+          "population_sd": 0.9938204425199308,
+          "min": 0.036843291629882424,
+          "max": 2.723199518732893
+        },
+        "f": {
+          "n": 10,
+          "mean": 4.1443246057149e-11,
+          "median": 1.2870315924118358e-11,
+          "population_sd": 6.179662249844015e-11,
+          "min": 1.333599897179738e-12,
+          "max": 2.1003929151497402e-10
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 5.4,
+        "median": 5.0,
+        "population_sd": 1.019803902718557,
+        "min": 4.0,
+        "max": 7.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 0.9,
+        "median": 1.0,
+        "population_sd": 0.8306623862918074,
+        "min": 0.0,
+        "max": 2.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 0.3,
+        "median": 0.0,
+        "population_sd": 0.6403124237432849,
+        "min": 0.0,
+        "max": 2.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.9541666666666666,
+        "median": 0.9791666666666667,
+        "population_sd": 0.050860648398890436,
+        "min": 0.875,
+        "max": 1.0
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 7.038243050573058,
+        "median": 4.539245677918888,
+        "population_sd": 6.693948318885486,
+        "min": 0.9042008016968839,
+        "max": 20.60191731239086
+      },
+      "improvement_ratio_imputed_runs": 0,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.504160565220105,
+        "median": 0.5394437731499897,
+        "population_sd": 0.18825985140701498,
+        "min": 0.0,
+        "max": 0.6630199963217134
+      },
+      "calibration_support": {
+        "reports": 55,
+        "reports_paired": 55,
+        "observations_on_shared_legacy_bin_boundaries": 99,
+        "coefficient_observations": 165
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 0,
+          "mean_confidence": 0.13333333333333333,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 7,
+          "successes": 0,
+          "mean_confidence": 0.24285714285714285,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 19,
+          "successes": 4,
+          "mean_confidence": 0.31842105263157894,
+          "success_fraction": 0.21052631578947367
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 26,
+          "successes": 2,
+          "mean_confidence": 0.4173076923076923,
+          "success_fraction": 0.07692307692307693
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 18,
+          "successes": 5,
+          "mean_confidence": 0.5111111111111111,
+          "success_fraction": 0.2777777777777778
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 28,
+          "successes": 12,
+          "mean_confidence": 0.6196428571428572,
+          "success_fraction": 0.42857142857142855
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 34,
+          "successes": 20,
+          "mean_confidence": 0.725,
+          "success_fraction": 0.5882352941176471
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 20,
+          "successes": 12,
+          "mean_confidence": 0.8200000000000001,
+          "success_fraction": 0.6
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 10,
+          "successes": 10,
+          "mean_confidence": 0.91,
+          "success_fraction": 1
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "difficulty": "hard",
+      "n": 10,
+      "success": {
+        "0.01": {
+          "count": 2,
+          "n": 10,
+          "rate": 0.2
+        },
+        "0.1": {
+          "count": 2,
+          "n": 10,
+          "rate": 0.2
+        }
+      },
+      "total_error": {
+        "n": 10,
+        "mean": 2.510425395054515,
+        "median": 2.3472284088306545,
+        "population_sd": 1.8499670900846,
+        "min": 0.0001778832609802966,
+        "max": 5.86902202468044
+      },
+      "coefficient_errors": {
+        "a": {
+          "n": 10,
+          "mean": 0.10669325304784959,
+          "median": 0.04877521722155523,
+          "population_sd": 0.12665820414159615,
+          "min": 1.2435535330368452e-06,
+          "max": 0.4077117720745253
+        },
+        "b": {
+          "n": 10,
+          "mean": 0.6854803060530991,
+          "median": 0.40486275656413173,
+          "population_sd": 0.7246779430389209,
+          "min": 1.247752817848391e-05,
+          "max": 2.173446523482319
+        },
+        "c": {
+          "n": 10,
+          "mean": 1.718251835923199,
+          "median": 1.8994862803619568,
+          "population_sd": 1.1536838473208373,
+          "min": 0.0001641621778031288,
+          "max": 3.489316249419466
+        },
+        "f": {
+          "n": 10,
+          "mean": 3.036729617766909e-11,
+          "median": 2.7080088171871353e-11,
+          "population_sd": 2.2265127109633587e-11,
+          "min": 1.4656470481710926e-12,
+          "max": 8.244749327701584e-11
+        }
+      },
+      "solves": {
+        "n": 10,
+        "mean": 1.3,
+        "median": 1.0,
+        "population_sd": 0.6403124237432849,
+        "min": 1.0,
+        "max": 3.0
+      },
+      "checks": {
+        "n": 10,
+        "mean": 0.8,
+        "median": 1.0,
+        "population_sd": 0.6,
+        "min": 0.0,
+        "max": 2.0
+      },
+      "term_integrals": {
+        "n": 10,
+        "mean": 3.9,
+        "median": 3.5,
+        "population_sd": 2.879236009777594,
+        "min": 0.0,
+        "max": 9.0
+      },
+      "budget_utilization": {
+        "n": 10,
+        "mean": 0.6833333333333333,
+        "median": 0.6666666666666666,
+        "population_sd": 0.03818813079129867,
+        "min": 0.6666666666666666,
+        "max": 0.7916666666666666
+      },
+      "improvement_ratio": {
+        "n": 10,
+        "mean": 1.1427671645182003,
+        "median": 1.0,
+        "population_sd": 0.5802959383309483,
+        "min": 0.5842041946141455,
+        "max": 2.843467450567857
+      },
+      "improvement_ratio_imputed_runs": 8,
+      "family_entropy": {
+        "n": 10,
+        "mean": 0.4383005006855444,
+        "median": 0.47666375925886245,
+        "population_sd": 0.173713379408001,
+        "min": 0.0,
+        "max": 0.6362027337173605
+      },
+      "calibration_support": {
+        "reports": 22,
+        "reports_paired": 22,
+        "coefficient_observations": 66,
+        "observations_on_shared_legacy_bin_boundaries": 15
+      },
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "upper_inclusive": false,
+          "n": 0,
+          "successes": 0,
+          "mean_confidence": null,
+          "success_fraction": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 0,
+          "mean_confidence": 0.1,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "upper_inclusive": false,
+          "n": 2,
+          "successes": 0,
+          "mean_confidence": 0.2,
+          "success_fraction": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "upper_inclusive": false,
+          "n": 3,
+          "successes": 1,
+          "mean_confidence": 0.31666666666666665,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "upper_inclusive": false,
+          "n": 8,
+          "successes": 2,
+          "mean_confidence": 0.43125,
+          "success_fraction": 0.25
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "upper_inclusive": false,
+          "n": 9,
+          "successes": 3,
+          "mean_confidence": 0.5511111111111111,
+          "success_fraction": 0.3333333333333333
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "upper_inclusive": false,
+          "n": 4,
+          "successes": 1,
+          "mean_confidence": 0.6625000000000001,
+          "success_fraction": 0.25
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "upper_inclusive": false,
+          "n": 12,
+          "successes": 5,
+          "mean_confidence": 0.755,
+          "success_fraction": 0.4166666666666667
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "upper_inclusive": false,
+          "n": 13,
+          "successes": 7,
+          "mean_confidence": 0.8315384615384616,
+          "success_fraction": 0.5384615384615384
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "upper_inclusive": true,
+          "n": 13,
+          "successes": 6,
+          "mean_confidence": 0.9338461538461539,
+          "success_fraction": 0.46153846153846156
+        }
+      ]
+    }
+  ],
+  "calibration_totals": {
+    "reports": 733,
+    "reports_paired": 707,
+    "observations_on_shared_legacy_bin_boundaries": 827,
+    "coefficient_observations": 2121,
+    "reports_excluded_no_preceding_solve": 26,
+    "reports_with_different_solve_from_legacy": 71
+  },
+  "changes_from_legacy_assets": [
+    "GPT-5.4 mini hard success at E < 0.01 is 2/10 in both run logs and sweep_results.json; the checked-in PNG displays 0/10.",
+    "Calibration uses causally available solve outputs and disjoint confidence bins, replacing forward-looking solve matching and overlapping bin boundaries.",
+    "Improvement figure shows individual runs and medians on a logarithmic axis; it omits arithmetic-mean bars and standard-deviation whiskers."
+  ]
+}

@@ -7,7 +7,7 @@ elliptic PDE? The model selects test functions, queries weak-form integrals,
 inspects numerical diagnostics, and decides when to submit its estimate.
 Numerical tools perform coefficient recovery; the model directs the experiment.
 
-[Manuscript](paper.pdf) · [Source](paper.tex) · [Kaggle notebooks](#repository-guide) · [MIT License](LICENSE)
+[Preprint (2026)](paper.pdf) · [Source](paper.tex) · [Reproduction guide](paper_artifacts/README.md) · [Kaggle notebooks](#repository-guide) · [MIT License](LICENSE)
 
 ## How it works
 
@@ -133,6 +133,12 @@ Single-run limits can be overridden with `--max-queries` and `--max-turns`.
 A small consistency residual alone does not establish coefficient recovery:
 ill-conditioned measurements can fit well while identifying coefficients poorly.
 
+For each field `q`, coefficient error is the largest absolute error among its
+basis coefficients. Total error sums those four values over `a`, `b`, `c`, and
+`f`; the paper uses the strict success threshold `E < 0.01`. The saved score is
+`results.coefficient_errors.total`. Pointwise error is a separate grid-based
+diagnostic, not the coefficient score.
+
 Every completed invocation writes a timestamped `run_*.json` with configuration,
 transcripts, queries, solves, ground truth, and available scores/diagnostics.
 Single runs also attempt a dashboard after a prediction; batch runs attempt a
@@ -143,27 +149,31 @@ paths, independently of `--output-dir`.
 For a reproducible experiment record, retain the JSON logs, exact command,
 `git rev-parse HEAD`, and `python -m pip freeze` alongside your analysis.
 
-## Results and evidence status
+## Paper and recorded results
 
-This repository contains several historical experiment artifacts with different
-scopes:
+Joseph K. Miller. **Can Language Models Learn a PDE? A Benchmark for Scientific
+Reasoning through Experimental Design.** Preprint, 2026.
+[PDF](paper.pdf) · [LaTeX source](paper.tex) · [Technical revision notes](paper_artifacts/REVISION_NOTES.txt)
 
-- The manuscript's preliminary comparison lists **18 attempts / 15 scored runs**
-  across three OpenAI models, three difficulties, and seeds 42 and 137.
-- Checked-in success-rate figures are labeled **180 scored runs across six
-  models**, with ten runs per model/difficulty combination. This is a different
-  design from the manuscript's proposed five-seed, two-prompt study.
-- Saved Kaggle notebook outputs contain additional exploratory runs under their
-  own settings.
+The revised paper analyzes **180 scored runs** from six models on 30 shared
+tasks: three difficulty settings and ten seeds per setting. On medium tasks,
+Gemini 3.1 Pro and Claude Opus 4.6 each succeed on 9/10 tasks, with mean
+consistency-check counts of 2.3 and 7.6. A fixed sine-query control solves all
+30 reconstructed archived tasks. These results describe experimental behavior;
+they do not establish a benefit from adaptive measurement selection.
 
-The complete per-run JSON archive behind those tables and figures is **not
-bundled**, so their aggregates cannot currently be regenerated from a fresh
-checkout. The manuscript's six-model, five-seed, two-prompt protocol is a proposed
-expansion, not a completed result established here. Historical numerical tables
-are preserved; no new provider benchmark was run for this reproducibility update.
-The previous README's single-seed, 28-query example is omitted because its source
-logs and exact settings are unavailable and it exceeds the current default hard
-budget of 24 queries.
+The original run archive is available as
+[Kaggle dataset version 1](https://www.kaggle.com/datasets/jkmiller/elliptic-differential-equation-llm-reasoning/versions/1).
+The [reproduction guide](paper_artifacts/README.md) explains how to build the
+paper, regenerate the final figures, and check the saved numerical controls
+without new model calls. The PDF, vector figures, source, numerical summaries,
+analysis scripts, and provenance manifests are included here. Raw run logs
+remain in the dataset; Kaggle may require sign-in to download it.
+
+The original Kaggle write-up is
+[Can Language Models Learn a PDE?](https://www.kaggle.com/competitions/kaggle-measuring-agi/writeups/can-language-models-learn-a-pde).
+Historical pilot results and earlier plotting scripts are retained for
+provenance; they are distinct from the completed six-model analysis.
 
 ## Repository guide
 
@@ -174,7 +184,10 @@ budget of 24 queries.
 | `basis.py`, `pde.py`, `weak_form.py` | Numerical problem generation and weak-form operations |
 | `expression_parser.py`, `sanitize_expression.py` | Test-function parsing and normalization |
 | `benchmark.py`, `diagnostics.py` | Scoring and dashboards |
-| `replot.py`, `plot_*.py`, `verify_metacognition.py` | Analysis of saved run logs |
+| `replot.py`, `plot_behavioral_profile.py`, `plot_hackathon.py`, `plot_success_rate.py`, `verify_metacognition.py` | Historical analysis and per-run diagnostics; see the current manuscript workflow below |
 | [kaggle-benchmark.ipynb](kaggle-benchmark.ipynb), [kaggle.ipynb](kaggle.ipynb) | Kaggle-specific exploratory notebooks; require their own Kaggle environment |
 | `test_basis.py`, `test_weak_form.py`, `test_parser.py`, `test_cli.py`, `test_sweep.py` | Offline numerical, protocol, and workflow tests |
 | [archive/](archive/) | Historical demos and earlier interfaces; outside the supported quick start |
+| [paper_artifacts/](paper_artifacts/) | Manuscript data summaries, provenance, tables, and reproduction instructions |
+| `plot_kaggle_revision.py`, `plot_kaggle_task.py` | Figures used in the current manuscript |
+| `analyze_review_runs.py`, `scripts/` | Archived-run validation, statistical analysis, and numerical controls |

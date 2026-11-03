@@ -1,0 +1,7 @@
+{
+  "control_baselines.json.gz": "1f766ee10d8aaa7e07fc8f255d6ee4a4cef76e3751dcc63c426a4790624d7db5",
+  "identifiability_audit.json": "17cf7ba238b0e7d792e7a25dfb753411c1a44121a02987013ed277c83365770b",
+  "statistical_analysis.json": "b8a5591c8e7e2f67fbfbf050829f3b8262f7983f80d9dc6a43fef5131441a146",
+  "sine_generalization.json": "842932165242e5695ad42ab9507dffcc0e772bcac4792fbbddbc9a762f4a1e66",
+  "plot_script_sha256": "ccf778f38ecd4f04a9876efe78b98d0e5625c4e583610db387fdb154bec56970"
+}

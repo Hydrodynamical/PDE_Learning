@@ -1,0 +1,54 @@
+\begin{table}[htbp]
+\centering
+\caption{Legacy pilot table from the earlier draft: three models, three difficulty levels, and two seeds (18 attempts, 15 scored). Values were not regenerated from the six-model archive.
+``---'' indicates the model failed to produce a scored run.}\label{tab:pilot}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrrrr}
+\toprule
+\textbf{Model} & \textbf{Diff} & \textbf{Seed} & $E_a$ & $E_b$ & $E_c$
+    & $E_f$ & $E$ & \textbf{Solves} & \textbf{Q used} \\
+\midrule
+GPT-4o       & easy   & 42  & 0.0001 & 0.0004 & 0.0026 & 0.0  & 0.003  & 2 & 11 \\
+GPT-4o       & easy   & 137 & 0.0000 & 0.0000 & 0.0000 & 0.0  & 0.000  & 3 & 12 \\
+GPT-5.4-mini & easy   & 42  & 0.0000 & 0.0002 & 0.0014 & 0.0  & 0.002  & 1 & 10 \\
+GPT-5.4-mini & easy   & 137 & 0.0000 & 0.0000 & 0.0001 & 0.0  & 0.000  & 1 &  8 \\
+GPT-5.4      & easy   & 42  & 0.0000 & 0.0001 & 0.0004 & 0.0  & 0.001  & 3 & 12 \\
+GPT-5.4      & easy   & 137 & 0.0000 & 0.0000 & 0.0000 & 0.0  & 0.000  & 4 & 12 \\
+\midrule
+GPT-4o       & medium & 42  & ---    & ---    & ---    & ---  & ---    & 0 &  9 \\
+GPT-4o       & medium & 137 & 0.0000 & 0.0002 & 0.0019 & 0.0  & 0.002  & 4 & 18 \\
+GPT-5.4-mini & medium & 42  & 0.1861 & 0.6740 & 1.4416 & 0.0  & 2.302  & 1 & 17 \\
+GPT-5.4-mini & medium & 137 & 0.0229 & 0.2777 & 2.4272 & 0.0  & 2.728  & 3 & 13 \\
+GPT-5.4      & medium & 42  & 0.0001 & 0.0005 & 0.0009 & 0.0  & 0.001  & 3 & 17 \\
+GPT-5.4      & medium & 137 & 0.0000 & 0.0000 & 0.0000 & 0.0  & 0.000  & 4 & 17 \\
+\midrule
+GPT-4o       & hard   & 42  & ---    & ---    & ---    & ---  & ---    & 0 &  0 \\
+GPT-4o       & hard   & 137 & ---    & ---    & ---    & ---  & ---    & 0 &  1 \\
+GPT-5.4-mini & hard   & 42  & 0.1275 & 1.4848 & 0.7268 & 0.0  & 2.339  & 1 & 20 \\
+GPT-5.4-mini & hard   & 137 & 0.1196 & 1.2099 & 3.5182 & 0.0  & 4.848  & 2 & 21 \\
+GPT-5.4      & hard   & 42  & 0.0730 & 2.1305 & 1.4725 & 0.0  & 3.676  & 7 & 23 \\
+GPT-5.4      & hard   & 137 & 0.0010 & 0.0424 & 0.2458 & 0.0  & 0.289  & 4 & 24 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Legacy pilot behavioral summary, preserved from the earlier draft. These medians were not regenerated from the six-model archive.
+$H$ = normalized family entropy; $R$ = improvement ratio; $W$ = wasted
+turn fraction; Tail = turns after last solve.  Check\% = checks as a
+fraction of queries (checks are free and do not consume budget).}\label{tab:pilotbehavior}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Model} & \textbf{Solves} & \textbf{Budget} & \textbf{Check\%}
+    & $H$ & $R$ & $\bar M$ & $W$ & \textbf{Tail} \\
+\midrule
+GPT-4o       & 3   & 96\%  & 13\% & 0.30 & 1.0 & --- & 0.05 & 1 \\
+GPT-5.4-mini & 1   & 78\%  & 18\% & 0.00 & 1.0 & 0.5 & 0.08 & 2 \\
+GPT-5.4      & 4   & 97\%  & 8\%  & 0.35 & 4.2 & 0.8 & 0.02 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}

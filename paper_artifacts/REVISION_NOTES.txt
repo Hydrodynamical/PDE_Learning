@@ -1,0 +1,71 @@
+PDE BENCHMARK: KAGGLE VISUAL REVISION
+2 November 2026
+
+The current manuscript follows the visual style of the original Kaggle write-up.
+The write-up was read in the browser and all five embedded chart types were
+matched to and inspected in the original repository images/ directory.
+See FIGURE_STYLE_NOTES.txt for the figure-by-figure mapping.
+
+The main figures now cover the task, success, tool use, within-session
+improvement, query diversity, and confidence calibration. Serif fonts, original
+palettes, grouped/stacked bars, mean bars with median marks, and compact curves
+replace the large scatter/raster layouts. The rejected trajectory and endpoint
+scatter are removed from the PDF; their data/scripts remain in the package.
+Supplementary confidence summaries and numerical controls remain in appendices.
+
+Stacked tool-use bars use means, so totals are additive. Corrected success
+counts, causal confidence matching, and separation of the 21 single-solve runs
+are preserved. All analysis uses the same 180 local records, with hashes in
+data/local_run_manifest.json. Historical ZIP-byte identity is not claimed.
+
+BUILD (from this directory, with NumPy and Matplotlib):
+  MPLCONFIGDIR=/private/tmp/pde-review-mpl python3 plot_kaggle_revision.py --runs-dir data/recorded_runs
+  MPLCONFIGDIR=/private/tmp/pde-review-mpl python3 plot_kaggle_task.py
+  latexmk -pdf -interaction=nonstopmode -halt-on-error paper.tex
+
+The older plotting/analysis scripts remain for reference. plot_kaggle_task.py
+reuses the corrected diagram geometry from plot_review_revision.py.
+Earlier manuscript versions remain available in Git history.
+
+VALIDATION
+18 pages, 9 figures. All rendered pages were checked. Figure and writing
+reviewers checked the integrated charts, numeric claims, and captions.
+The proof is unchanged; no unresolved references/citations or overfull boxes.
+Checksums are in paper_artifacts/review_validation.json.
+No new model calls, numerical experiments, publication, or push was performed.
+
+TECHNICAL AUDIT NOTE: LEGACY SENSITIVITY SCORES
+2 November 2026 - moved out of former Appendix E at the author's request.
+These diagnostics do not support any figure or result in the current paper.
+Current confidence analyses compare reported probabilities with actual
+coefficient correctness. The code-audit explanation is retained here for
+provenance; the original research repository has not been changed.
+
+Source: main_loop.py,
+compute_metacognitive_metrics() (starting at line 1158).
+Older diagnostic plots: plot_hackathon.py,
+_draw_metacog_conf_sigma(), _draw_metacog_control(), and plot_metacognition().
+
+The archived routine forms a truncated pseudoinverse H_k of A_k^T A_k,
+discarding singular values below 10^-10 times the largest. For a coefficient
+block q with N basis coefficients, it calculates
+s_k(q) = sqrt(sum_{i in q}(H_k)_{ii} / N).
+A truncated inverse can assign zero weight to unresolved directions. Without
+an observation-noise model and rank conditions, it is not a calibrated
+coefficient covariance. Separate block values also cannot diagnose dependencies
+between blocks.
+
+The monitoring routine ranks values using double argsort, without averaging
+ties; it is not standard tie-aware Spearman correlation. The control routine
+applies a Sherman-Morrison-style update to a truncated pseudoinverse, which
+need not agree with a freshly recomputed truncated inverse, and compares
+reductions across blocks for the chosen next row rather than across candidate
+queries. These source fields are retained for provenance but are not used as
+evidence of calibrated uncertainty or optimal experimental design.
+
+APPENDIX REMOVAL VALIDATION
+Rebuilt successfully: 18 pages, 9 figures. Appendix E is absent from the
+extracted PDF text. Pages 1-17 are unchanged in text and raster comparisons;
+the final page was rendered and visually checked. There are no unresolved
+references/citations or overfull boxes. Updated checksums are recorded in
+paper_artifacts/review_validation.json.

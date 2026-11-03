@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-02",
+  "revision": "Kaggle visual pivot; removed unused Appendix E",
+  "pages": 18,
+  "figures": 9,
+  "figure_pages": {
+    "1": 3,
+    "2": 4,
+    "3": 5,
+    "4": 5,
+    "5": 6,
+    "6": 6,
+    "7": 13,
+    "8": 15,
+    "9": 18
+  },
+  "references_start_page": 8,
+  "proof_unchanged": true,
+  "unresolved_references": false,
+  "overfull_boxes": false,
+  "final_pages_visually_reviewed": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+  ],
+  "main_figures_before_references": true,
+  "review_passes": [
+    "writing and numerical consistency",
+    "Kaggle source comparison",
+    "integrated figure and page layout"
+  ],
+  "data_provenance": "Same validated 180 local run records; no new model calls.",
+  "pdf_sha256": "8eec7b398ab3958e38088657c22df22c0c6ae321470b942b29c4f75eef0a73fd",
+  "source_sha256": "4f69a8aa7c72404dde5614c98a3d32f86e3d3d3103a96cb4e5f423dccf4c5d5b",
+  "plot_source_sha256": "106f9a243850b4232692458a95ca2c256e178ee14b162d5785bb3e7a63fd21d9",
+  "figure_sha256": {
+    "images/kaggle_task.pdf": "1f3ead09acc08c5912d50ab0f0d0ed9d26206074282805cbcd684ea9041f937d",
+    "images/kaggle_success.pdf": "d569bbc3e74f118c49398e68ba85865968378334bda3165d8b10ea632f3a820b",
+    "images/kaggle_actions.pdf": "2bf09a32b32ae4c99525343c3f1ec33619938a4cf5fbb628bbf52874c6af0373",
+    "images/kaggle_improvement.pdf": "011026c2f9c63262e88de55babde2ba114c5a7f11c9584b1269b443409de271e",
+    "images/kaggle_diversity.pdf": "4811529febaf6a245fa47098dd83ee547ecb9814fc547b257dabce00532a9e7b",
+    "images/kaggle_reliability.pdf": "1142e0591eee6f0f33560f49667b3ce11c92f882b119f621f9aa51471b62ba29",
+    "images/kaggle_controls.pdf": "a4a1cc5288be7382da21114d823f2110e07a3dee1ffeb72772ab6399decabb52",
+    "images/kaggle_numerics.pdf": "b7f9a330c3de92e846c7098b010c231d8d4d0d82fbff54634e903a08f495e480",
+    "images/kaggle_confidence.pdf": "ca4ac44263ca696528d38294c6381bb6c3d47bdce8d2adcf4d8a0c4de089746d"
+  },
+  "appendix_e_removal": {
+    "technical_explanation_preserved_in": "REVISION_NOTES.txt",
+    "pages_1_through_17_text_and_render_unchanged": true,
+    "page_18_visually_reviewed": true,
+    "no_unresolved_references_or_citations": true,
+    "no_overfull_boxes": true
+  },
+  "publication_packaging": "Added pinned-archive input to final figure script; manuscript PDF and scientific results unchanged."
+}
