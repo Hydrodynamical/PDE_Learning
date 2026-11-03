@@ -222,3 +222,6 @@ __marimo__/
 
 # run folder
 runs/
+
+# macOS Finder metadata
+.DS_Store
